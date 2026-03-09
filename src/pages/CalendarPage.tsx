@@ -36,7 +36,7 @@ export default function CalendarPage() {
     // Add vacation events
     const vacationEvents = mockVacations
       .filter(v => isInRange(dateStr, v.startDate, v.endDate))
-      .map(v => ({ id: `vac-${v.employeeId}-${day}`, title: `Férias - ${v.employeeName}`, date: dateStr, type: "vacation" as const, employeeName: v.employeeName, color: v.color }));
+      .map(v => ({ id: `vac-${v.employeeId}-${day}`, title: `Férias - ${v.employeeName}`, date: dateStr, type: "vacation" as const, employeeName: v.employeeName, color: v.color } as CalendarEvent));
     return [...events, ...vacationEvents];
   };
 
