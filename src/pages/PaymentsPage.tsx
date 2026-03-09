@@ -15,6 +15,7 @@ const columns = [
   { key: "id", label: "ID" },
   { key: "loanId", label: "Empréstimo" },
   { key: "clientName", label: "Cliente" },
+  { key: "installmentNumber", label: "Parcela", render: (p: Payment) => `#${p.installmentNumber}` },
   { key: "amount", label: "Valor", render: (p: Payment) => <span className="font-medium">{formatCurrency(p.amount)}</span> },
   { key: "method", label: "Método" },
   { key: "status", label: "Status", render: (p: Payment) => <StatusBadge status={p.status} /> },
@@ -47,32 +48,40 @@ export default function PaymentsPage() {
                     <SelectTrigger><SelectValue placeholder="Selecionar empréstimo" /></SelectTrigger>
                     <SelectContent>
                       {mockLoans.filter(l => l.status === "ativo" || l.status === "atrasado").map(l => (
-                        <SelectItem key={l.id} value={l.id}>{l.id} - {l.clientName}</SelectItem>
+                        <SelectItem key={l.id} value={l.id}>{l.id} - {l.clientName} ({formatCurrency(l.monthlyPayment)})</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Valor (MZN)</Label><Input type="number" placeholder="Valor" /></div>
-                  <div><Label>Data</Label><Input type="date" /></div>
+                  <div><Label>Valor (MT)</Label><Input type="number" placeholder="Valor do pagamento" /></div>
+                  <div><Label>Data</Label><Input type="date" defaultValue="2025-03-09" /></div>
                 </div>
                 <div>
                   <Label>Método de Pagamento</Label>
                   <Select>
-                    <SelectTrigger><SelectValue placeholder="Selecionar" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Selecionar método" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="transfer">Transferência</SelectItem>
+                      <SelectItem value="transfer">Transferência Bancária</SelectItem>
                       <SelectItem value="mpesa">M-Pesa</SelectItem>
-                      <SelectItem value="deposit">Depósito</SelectItem>
+                      <SelectItem value="emola">e-Mola</SelectItem>
+                      <SelectItem value="deposit">Depósito Bancário</SelectItem>
                       <SelectItem value="cash">Dinheiro</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div>
                   <Label>Comprovativo (opcional)</Label>
-                  <Input type="file" />
+                  <Input type="file" accept="image/*,.pdf" />
+                  <p className="text-xs text-muted-foreground mt-1">Formato: imagem ou PDF</p>
                 </div>
-                <Button className="w-full" onClick={() => setShowNew(false)}>Registrar</Button>
+
+                <div className="bg-info/5 border border-info/20 rounded-lg p-3 text-sm">
+                  <p className="font-medium text-info">Actualização automática</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Ao registrar o pagamento, o saldo devedor do empréstimo será actualizado automaticamente.</p>
+                </div>
+
+                <Button className="w-full" onClick={() => setShowNew(false)}>Registrar Pagamento</Button>
               </div>
             </DialogContent>
           </Dialog>
