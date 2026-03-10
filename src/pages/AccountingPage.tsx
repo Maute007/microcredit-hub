@@ -116,7 +116,7 @@ export default function AccountingPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <div className="bg-card rounded-lg border p-5">
+        <div className="bg-card rounded-xl border p-5">
           <h3 className="font-semibold mb-4">Fluxo de Caixa Diário (Março)</h3>
           <ResponsiveContainer width="100%" height={230}>
             <AreaChart data={dailyFlow}>
@@ -130,7 +130,7 @@ export default function AccountingPage() {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-card rounded-lg border p-5">
+        <div className="bg-card rounded-xl border p-5">
           <h3 className="font-semibold mb-4">Por Categoria</h3>
           <ResponsiveContainer width="100%" height={230}>
             <BarChart data={categoryData} layout="vertical">
