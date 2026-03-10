@@ -88,11 +88,11 @@ export default function PaymentsPage() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Total Pagamentos" value={String(mockPayments.length)} icon={CreditCard} />
-        <StatCard title="Pagos" value={formatCurrency(paid.reduce((s, p) => s + p.amount, 0))} icon={CheckCircle} variant="success" subtitle={`${paid.length} pagamento(s)`} />
-        <StatCard title="Pendentes" value={formatCurrency(pending.reduce((s, p) => s + p.amount, 0))} icon={Clock} variant="warning" subtitle={`${pending.length} pagamento(s)`} />
-        <StatCard title="Atrasados" value={formatCurrency(overdue.reduce((s, p) => s + p.amount, 0))} icon={AlertTriangle} variant="destructive" subtitle={`${overdue.length} pagamento(s)`} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <StatCard title="Total Pagamentos" value={String(mockPayments.length)} icon={CreditCard} sparkData={[8, 10, 9, 12, 11, 12]} trend={{ value: 12, label: "vs mês anterior" }} />
+        <StatCard title="Pagos" value={formatCurrency(paid.reduce((s, p) => s + p.amount, 0))} icon={CheckCircle} variant="success" subtitle={`${paid.length} pagamento(s)`} sparkData={[20000, 28000, 35000, 30000, 42000, paid.reduce((s, p) => s + p.amount, 0)]} />
+        <StatCard title="Pendentes" value={formatCurrency(pending.reduce((s, p) => s + p.amount, 0))} icon={Clock} variant="warning" subtitle={`${pending.length} pagamento(s)`} progress={{ value: pending.length, max: mockPayments.length, label: "Taxa pendente" }} />
+        <StatCard title="Atrasados" value={formatCurrency(overdue.reduce((s, p) => s + p.amount, 0))} icon={AlertTriangle} variant="destructive" subtitle={`${overdue.length} pagamento(s)`} progress={{ value: overdue.length, max: mockPayments.length, label: "Taxa de atraso" }} />
       </div>
 
       <DataTable data={mockPayments} columns={columns} searchKeys={["clientName", "loanId", "method"]} />

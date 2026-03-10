@@ -110,9 +110,9 @@ export default function AccountingPage() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <StatCard title="Total Entradas" value={formatCurrency(totalEntries)} icon={TrendingUp} variant="success" />
-        <StatCard title="Total Saídas" value={formatCurrency(totalExits)} icon={TrendingDown} variant="destructive" />
-        <StatCard title="Saldo Geral" value={formatCurrency(totalEntries - totalExits)} icon={Wallet} variant={totalEntries - totalExits >= 0 ? "primary" : "destructive"} />
+        <StatCard title="Total Entradas" value={formatCurrency(totalEntries)} icon={TrendingUp} variant="success" sparkData={[12500, 3700, 14392, 5225, 4583, 3354, totalEntries / 3]} trend={{ value: 18, label: "vs mês anterior" }} />
+        <StatCard title="Total Saídas" value={formatCurrency(totalExits)} icon={TrendingDown} variant="destructive" sparkData={[25000, 38500, 12000, 278000, 20000, 8000, totalExits / 4]} trend={{ value: -7, label: "vs mês anterior" }} />
+        <StatCard title="Saldo Geral" value={formatCurrency(totalEntries - totalExits)} icon={Wallet} variant={totalEntries - totalExits >= 0 ? "primary" : "destructive"} progress={{ value: Math.round(totalEntries), max: Math.round(totalEntries + totalExits), label: "Entradas vs Total" }} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
