@@ -8,8 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mockEmployees, mockVacations, generateSalarySlip, formatCurrency, formatDate, Employee, SalarySlip, Vacation } from "@/data/mockData";
-import { Plus, Users, DollarSign, UserCheck, UserX, CalendarDays, FileText, ChevronLeft, ChevronRight, Printer } from "lucide-react";
+import { mockEmployees, mockVacations, mockAttendance, generateSalarySlip, formatCurrency, formatDate, Employee, SalarySlip, Vacation, AttendanceRecord } from "@/data/mockData";
+import { Plus, Users, DollarSign, UserCheck, UserX, CalendarDays, FileText, ChevronLeft, ChevronRight, Printer, Clock, ClipboardCheck } from "lucide-react";
 
 const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const weekDays = ["Dom","Seg","Ter","Qua","Qui","Sex","Sáb"];
@@ -36,10 +36,19 @@ const employeeColumns = [
 const active = mockEmployees.filter(e => e.status === "ativo");
 const totalSalary = active.reduce((s, e) => s + e.baseSalary, 0);
 
+const attendanceStatusStyle: Record<string, string> = {
+  presente: "bg-success/10 text-success",
+  ausente: "bg-destructive/10 text-destructive",
+  atrasado: "bg-warning/10 text-warning",
+  férias: "bg-info/10 text-info",
+  justificado: "bg-muted text-muted-foreground",
+};
+
 export default function HRPage() {
   const [showNew, setShowNew] = useState(false);
   const [calDate, setCalDate] = useState(new Date(2025, 2));
   const [selectedSlip, setSelectedSlip] = useState<SalarySlip | null>(null);
+  const [attendanceDate, setAttendanceDate] = useState("2025-03-07");
 
   const year = calDate.getFullYear();
   const month = calDate.getMonth();
@@ -51,11 +60,17 @@ export default function HRPage() {
     return mockVacations.filter(v => isDateInRange(dateStr, v.startDate, v.endDate));
   };
 
+  const dayAttendance = mockAttendance.filter(a => a.date === attendanceDate);
+  const presentToday = dayAttendance.filter(a => a.status === "presente").length;
+  const lateToday = dayAttendance.filter(a => a.status === "atrasado").length;
+  const absentToday = dayAttendance.filter(a => a.status === "ausente").length;
+  const avgHours = dayAttendance.length > 0 ? (dayAttendance.reduce((s, a) => s + a.hoursWorked, 0) / dayAttendance.filter(a => a.hoursWorked > 0).length || 0).toFixed(1) : "0";
+
   return (
     <div>
       <PageHeader
         title="Recursos Humanos"
-        description="Gestão de colaboradores, férias e folha salarial"
+        description="Gestão de colaboradores, férias, presença e folha salarial"
         actions={
           <Dialog open={showNew} onOpenChange={setShowNew}>
             <DialogTrigger asChild>
@@ -84,16 +99,17 @@ export default function HRPage() {
         }
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Total Colaboradores" value={String(mockEmployees.length)} icon={Users} />
-        <StatCard title="Ativos" value={String(active.length)} icon={UserCheck} variant="success" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <StatCard title="Total Colaboradores" value={String(mockEmployees.length)} icon={Users} sparkData={[4, 5, 5, 6, 7, 8]} />
+        <StatCard title="Ativos" value={String(active.length)} icon={UserCheck} variant="success" progress={{ value: active.length, max: mockEmployees.length, label: "Taxa de atividade" }} />
         <StatCard title="Inativos" value={String(mockEmployees.length - active.length)} icon={UserX} variant="warning" />
-        <StatCard title="Folha Salarial" value={formatCurrency(totalSalary)} icon={DollarSign} variant="primary" />
+        <StatCard title="Folha Salarial" value={formatCurrency(totalSalary)} icon={DollarSign} variant="primary" trend={{ value: 5, label: "vs mês anterior" }} />
       </div>
 
       <Tabs defaultValue="employees" className="space-y-4">
-        <TabsList>
+        <TabsList className="flex-wrap">
           <TabsTrigger value="employees"><Users className="h-4 w-4 mr-1.5" />Colaboradores</TabsTrigger>
+          <TabsTrigger value="attendance"><ClipboardCheck className="h-4 w-4 mr-1.5" />Presença</TabsTrigger>
           <TabsTrigger value="vacations"><CalendarDays className="h-4 w-4 mr-1.5" />Férias</TabsTrigger>
           <TabsTrigger value="payroll"><FileText className="h-4 w-4 mr-1.5" />Folha Salarial</TabsTrigger>
         </TabsList>
@@ -103,9 +119,95 @@ export default function HRPage() {
           <DataTable data={mockEmployees} columns={employeeColumns} searchKeys={["name", "role", "department", "email"]} />
         </TabsContent>
 
+        {/* ==================== ATTENDANCE TAB ==================== */}
+        <TabsContent value="attendance">
+          <div className="space-y-4">
+            {/* Date selector & summary */}
+            <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end">
+              <div>
+                <Label className="text-xs">Data</Label>
+                <Input type="date" value={attendanceDate} onChange={e => setAttendanceDate(e.target.value)} className="w-44" />
+              </div>
+              <div className="flex gap-3">
+                <div className="bg-success/10 border border-success/20 rounded-lg px-3 py-2 text-center">
+                  <p className="text-lg font-bold text-success">{presentToday}</p>
+                  <p className="text-[10px] text-muted-foreground">Presentes</p>
+                </div>
+                <div className="bg-warning/10 border border-warning/20 rounded-lg px-3 py-2 text-center">
+                  <p className="text-lg font-bold text-warning">{lateToday}</p>
+                  <p className="text-[10px] text-muted-foreground">Atrasados</p>
+                </div>
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2 text-center">
+                  <p className="text-lg font-bold text-destructive">{absentToday}</p>
+                  <p className="text-[10px] text-muted-foreground">Ausentes</p>
+                </div>
+                <div className="bg-primary/10 border border-primary/20 rounded-lg px-3 py-2 text-center">
+                  <p className="text-lg font-bold text-primary">{avgHours}h</p>
+                  <p className="text-[10px] text-muted-foreground">Média Horas</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Attendance table */}
+            <div className="bg-card rounded-xl border">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Colaborador</th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">Cargo</th>
+                      <th className="px-4 py-3 text-center font-medium text-muted-foreground">Entrada</th>
+                      <th className="px-4 py-3 text-center font-medium text-muted-foreground">Saída</th>
+                      <th className="px-4 py-3 text-center font-medium text-muted-foreground">Horas</th>
+                      <th className="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {active.map(emp => {
+                      const record = dayAttendance.find(a => a.employeeId === emp.id);
+                      const status = record?.status || "ausente";
+                      return (
+                        <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold" style={{ backgroundColor: emp.color + "22", color: emp.color }}>
+                                {emp.name.split(" ").map(n => n[0]).slice(0, 2).join("")}
+                              </div>
+                              <span className="font-medium">{emp.name}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">{emp.role}</td>
+                          <td className="px-4 py-3 text-center">
+                            {record?.checkIn ? (
+                              <span className="inline-flex items-center gap-1 text-xs"><Clock className="h-3 w-3" />{record.checkIn}</span>
+                            ) : <span className="text-xs text-muted-foreground">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {record?.checkOut ? (
+                              <span className="inline-flex items-center gap-1 text-xs"><Clock className="h-3 w-3" />{record.checkOut}</span>
+                            ) : <span className="text-xs text-muted-foreground">—</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center font-medium">
+                            {record?.hoursWorked ? `${record.hoursWorked}h` : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${attendanceStatusStyle[status] || attendanceStatusStyle.ausente}`}>
+                              {status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+
         {/* ==================== VACATIONS CALENDAR TAB ==================== */}
         <TabsContent value="vacations">
-          <div className="bg-card rounded-lg border p-5">
+          <div className="bg-card rounded-xl border p-5">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold">{months[month]} {year} — Calendário de Férias</h3>
               <div className="flex gap-1">
@@ -138,7 +240,7 @@ export default function HRPage() {
               {Array.from({ length: daysInMonth }, (_, i) => {
                 const day = i + 1;
                 const vacations = getVacationsForDay(day);
-                const isToday = day === 9 && month === 2 && year === 2025;
+                const isToday = day === 10 && month === 2 && year === 2025;
                 return (
                   <div key={day} className="bg-card min-h-[72px] p-1.5 relative">
                     <span className={`text-xs ${isToday ? "bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center font-bold" : "text-muted-foreground"}`}>
@@ -165,7 +267,7 @@ export default function HRPage() {
 
         {/* ==================== PAYROLL TAB ==================== */}
         <TabsContent value="payroll">
-          <div className="bg-card rounded-lg border">
+          <div className="bg-card rounded-xl border">
             <div className="p-4 border-b">
               <h3 className="font-semibold">Recibos de Vencimento — Março 2025</h3>
               <p className="text-xs text-muted-foreground mt-0.5">Clique num colaborador para ver o recibo detalhado</p>
@@ -188,7 +290,14 @@ export default function HRPage() {
                     const slip = generateSalarySlip(emp, "2025-03");
                     return (
                       <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 font-medium">{emp.name}</td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold" style={{ backgroundColor: emp.color + "22", color: emp.color }}>
+                              {emp.name.split(" ").map(n => n[0]).slice(0, 2).join("")}
+                            </div>
+                            <span className="font-medium">{emp.name}</span>
+                          </div>
+                        </td>
                         <td className="px-4 py-3 text-muted-foreground">{emp.role}</td>
                         <td className="px-4 py-3 text-right">{formatCurrency(slip.baseSalary)}</td>
                         <td className="px-4 py-3 text-right text-destructive">-{formatCurrency(slip.inss)}</td>

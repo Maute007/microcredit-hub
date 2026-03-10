@@ -259,6 +259,41 @@ export const mockCalendarEvents: CalendarEvent[] = [
   { id: "EV013", title: "Férias - Ricardo Tembe", date: "2025-03-24", type: "vacation", employeeName: "Ricardo Tembe", color: employeeColors[2] },
 ];
 
+// ==================== ATTENDANCE ====================
+
+export interface AttendanceRecord {
+  employeeId: string;
+  employeeName: string;
+  date: string;
+  checkIn: string;
+  checkOut: string;
+  status: "presente" | "ausente" | "atrasado" | "férias" | "justificado";
+  hoursWorked: number;
+}
+
+export const mockAttendance: AttendanceRecord[] = [
+  { employeeId: "F001", employeeName: "António Ribeiro", date: "2025-03-07", checkIn: "07:55", checkOut: "17:05", status: "presente", hoursWorked: 9 },
+  { employeeId: "F002", employeeName: "Fátima Nguema", date: "2025-03-07", checkIn: "", checkOut: "", status: "férias", hoursWorked: 0 },
+  { employeeId: "F003", employeeName: "Ricardo Tembe", date: "2025-03-07", checkIn: "08:00", checkOut: "17:00", status: "presente", hoursWorked: 9 },
+  { employeeId: "F004", employeeName: "Sara Mabote", date: "2025-03-07", checkIn: "08:35", checkOut: "17:10", status: "atrasado", hoursWorked: 8.5 },
+  { employeeId: "F005", employeeName: "David Chissano", date: "2025-03-07", checkIn: "07:50", checkOut: "17:00", status: "presente", hoursWorked: 9 },
+  { employeeId: "F007", employeeName: "Jorge Mondlane", date: "2025-03-07", checkIn: "08:00", checkOut: "17:00", status: "presente", hoursWorked: 9 },
+  { employeeId: "F008", employeeName: "Mariana Sitoe", date: "2025-03-07", checkIn: "07:45", checkOut: "17:15", status: "presente", hoursWorked: 9.5 },
+  { employeeId: "F001", employeeName: "António Ribeiro", date: "2025-03-06", checkIn: "08:00", checkOut: "17:00", status: "presente", hoursWorked: 9 },
+  { employeeId: "F002", employeeName: "Fátima Nguema", date: "2025-03-06", checkIn: "", checkOut: "", status: "férias", hoursWorked: 0 },
+  { employeeId: "F003", employeeName: "Ricardo Tembe", date: "2025-03-06", checkIn: "08:10", checkOut: "17:00", status: "atrasado", hoursWorked: 8.8 },
+  { employeeId: "F004", employeeName: "Sara Mabote", date: "2025-03-06", checkIn: "", checkOut: "", status: "justificado", hoursWorked: 0 },
+  { employeeId: "F005", employeeName: "David Chissano", date: "2025-03-06", checkIn: "07:55", checkOut: "17:05", status: "presente", hoursWorked: 9 },
+  { employeeId: "F007", employeeName: "Jorge Mondlane", date: "2025-03-06", checkIn: "08:00", checkOut: "17:00", status: "presente", hoursWorked: 9 },
+  { employeeId: "F008", employeeName: "Mariana Sitoe", date: "2025-03-06", checkIn: "", checkOut: "", status: "ausente", hoursWorked: 0 },
+  { employeeId: "F001", employeeName: "António Ribeiro", date: "2025-03-05", checkIn: "07:50", checkOut: "17:00", status: "presente", hoursWorked: 9 },
+  { employeeId: "F003", employeeName: "Ricardo Tembe", date: "2025-03-05", checkIn: "08:00", checkOut: "17:00", status: "presente", hoursWorked: 9 },
+  { employeeId: "F004", employeeName: "Sara Mabote", date: "2025-03-05", checkIn: "08:00", checkOut: "17:00", status: "presente", hoursWorked: 9 },
+  { employeeId: "F005", employeeName: "David Chissano", date: "2025-03-05", checkIn: "08:15", checkOut: "17:00", status: "atrasado", hoursWorked: 8.75 },
+  { employeeId: "F007", employeeName: "Jorge Mondlane", date: "2025-03-05", checkIn: "08:00", checkOut: "17:00", status: "presente", hoursWorked: 9 },
+  { employeeId: "F008", employeeName: "Mariana Sitoe", date: "2025-03-05", checkIn: "07:45", checkOut: "17:30", status: "presente", hoursWorked: 9.75 },
+];
+
 // ==================== FORMATTERS ====================
 
 export function formatCurrency(value: number): string {
