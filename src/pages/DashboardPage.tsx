@@ -1,8 +1,8 @@
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { PageHeader } from "@/components/PageHeader";
-import { mockLoans, mockPayments, mockClients, mockTransactions, formatCurrency, formatDate } from "@/data/mockData";
-import { Wallet, TrendingUp, AlertTriangle, Users, ArrowUpRight, ArrowDownRight, CreditCard, Banknote } from "lucide-react";
+import { mockLoans, mockPayments, mockClients, mockTransactions, mockEmployees, formatCurrency, formatDate } from "@/data/mockData";
+import { Wallet, TrendingUp, AlertTriangle, Users, ArrowUpRight, CreditCard, Banknote, PieChart as PieIcon, BarChart3, Activity } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area, LineChart, Line } from "recharts";
 
 const activeLoans = mockLoans.filter(l => l.status === "ativo" || l.status === "atrasado");
@@ -12,6 +12,7 @@ const monthlyReceived = paidPayments.reduce((s, p) => s + p.amount, 0);
 const overdueLoans = mockLoans.filter(l => l.status === "atrasado");
 const overdueTotal = overdueLoans.reduce((s, l) => s + l.remainingBalance, 0);
 const totalPortfolio = mockLoans.reduce((s, l) => s + l.amount, 0);
+const activeClients = mockClients.filter(c => c.status === "ativo").length;
 
 const monthlyData = [
   { month: "Set", recebido: 38000, emprestado: 35000 },
@@ -48,23 +49,94 @@ const clientGrowth = [
   { month: "Mar", clientes: 10 },
 ];
 
+const sparkReceived = [38000, 45000, 52000, 48000, 58000, 62000, 32000];
+const sparkOverdue = [2, 1, 3, 2, 1, 1, 1];
+const sparkClients = [5, 5, 6, 7, 8, 10];
+const sparkPortfolio = [280000, 310000, 340000, 370000, 395000, 410000];
+
+const entradas = mockTransactions.filter(t => t.type === "entrada").reduce((s, t) => s + t.amount, 0);
+const saidas = mockTransactions.filter(t => t.type === "saida").reduce((s, t) => s + t.amount, 0);
+
 export default function DashboardPage() {
   return (
     <div>
       <PageHeader title="Dashboard" description="Visão geral do sistema de microcrédito" />
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Carteira de Crédito" value={formatCurrency(totalPortfolio)} icon={Wallet} variant="primary" trend={{ value: 15, label: "vs mês anterior" }} />
-        <StatCard title="Recebido no Mês" value={formatCurrency(monthlyReceived)} icon={TrendingUp} variant="success" subtitle={`${paidPayments.length} pagamentos`} />
-        <StatCard title="Total em Atraso" value={formatCurrency(overdueTotal)} icon={AlertTriangle} variant="destructive" subtitle={`${overdueLoans.length} empréstimo(s)`} />
-        <StatCard title="Clientes Ativos" value={String(mockClients.filter(c => c.status === "ativo").length)} icon={Users} variant="default" trend={{ value: 8, label: "este mês" }} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <StatCard
+          title="Carteira de Crédito"
+          value={formatCurrency(totalPortfolio)}
+          icon={Wallet}
+          variant="primary"
+          trend={{ value: 15, label: "vs mês anterior" }}
+          sparkData={sparkPortfolio}
+        />
+        <StatCard
+          title="Recebido no Mês"
+          value={formatCurrency(monthlyReceived)}
+          icon={TrendingUp}
+          variant="success"
+          subtitle={`${paidPayments.length} pagamentos realizados`}
+          sparkData={sparkReceived}
+        />
+        <StatCard
+          title="Total em Atraso"
+          value={formatCurrency(overdueTotal)}
+          icon={AlertTriangle}
+          variant="destructive"
+          subtitle={`${overdueLoans.length} empréstimo(s) atrasado(s)`}
+          progress={{ value: overdueLoans.length, max: mockLoans.length, label: "Taxa de inadimplência" }}
+        />
+        <StatCard
+          title="Clientes Ativos"
+          value={String(activeClients)}
+          icon={Users}
+          variant="default"
+          trend={{ value: 8, label: "este mês" }}
+          sparkData={sparkClients}
+        />
       </div>
 
-      {/* Row 2: empréstimos por mês + pie */}
+      {/* Row 2: secondary KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="bg-card rounded-xl border p-4 flex items-center gap-3">
+          <div className="rounded-lg p-2 bg-success/10"><ArrowUpRight className="h-4 w-4 text-success" /></div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Entradas</p>
+            <p className="text-sm font-bold">{formatCurrency(entradas)}</p>
+          </div>
+        </div>
+        <div className="bg-card rounded-xl border p-4 flex items-center gap-3">
+          <div className="rounded-lg p-2 bg-destructive/10"><Banknote className="h-4 w-4 text-destructive" /></div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Saídas</p>
+            <p className="text-sm font-bold">{formatCurrency(saidas)}</p>
+          </div>
+        </div>
+        <div className="bg-card rounded-xl border p-4 flex items-center gap-3">
+          <div className="rounded-lg p-2 bg-primary/10"><CreditCard className="h-4 w-4 text-primary" /></div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Empréstimos</p>
+            <p className="text-sm font-bold">{mockLoans.length} total</p>
+          </div>
+        </div>
+        <div className="bg-card rounded-xl border p-4 flex items-center gap-3">
+          <div className="rounded-lg p-2 bg-info/10"><Activity className="h-4 w-4 text-info" /></div>
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Funcionários</p>
+            <p className="text-sm font-bold">{mockEmployees.filter(e => e.status === "ativo").length} ativos</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: empréstimos por mês + pie */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        <div className="lg:col-span-2 bg-card rounded-lg border p-5">
-          <h3 className="font-semibold mb-1">Fluxo Financeiro Mensal</h3>
+        <div className="lg:col-span-2 bg-card rounded-xl border p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-semibold">Fluxo Financeiro Mensal</h3>
+          </div>
           <p className="text-xs text-muted-foreground mb-4">Comparativo de valores recebidos vs emprestados</p>
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={monthlyData}>
@@ -78,8 +150,11 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-card rounded-lg border p-5">
-          <h3 className="font-semibold mb-1">Empréstimos por Status</h3>
+        <div className="bg-card rounded-xl border p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <PieIcon className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-semibold">Empréstimos por Status</h3>
+          </div>
           <p className="text-xs text-muted-foreground mb-4">{mockLoans.length} empréstimos no total</p>
           <ResponsiveContainer width="100%" height={180}>
             <PieChart>
@@ -100,9 +175,9 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Row 3: cash flow + client growth */}
+      {/* Row 4: cash flow + client growth */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        <div className="bg-card rounded-lg border p-5">
+        <div className="bg-card rounded-xl border p-5">
           <h3 className="font-semibold mb-1">Fluxo de Caixa — Março 2025</h3>
           <p className="text-xs text-muted-foreground mb-4">Entradas e saídas diárias</p>
           <ResponsiveContainer width="100%" height={200}>
@@ -117,7 +192,7 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-card rounded-lg border p-5">
+        <div className="bg-card rounded-xl border p-5">
           <h3 className="font-semibold mb-1">Crescimento de Clientes</h3>
           <p className="text-xs text-muted-foreground mb-4">Últimos 6 meses</p>
           <ResponsiveContainer width="100%" height={200}>
@@ -133,11 +208,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-card rounded-lg border p-5">
+      <div className="bg-card rounded-xl border p-5">
         <h3 className="font-semibold mb-4">Actividade Recente</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {mockPayments.slice(0, 6).map((p) => (
-            <div key={p.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg border">
+            <div key={p.id} className="flex items-center justify-between py-2.5 px-3 rounded-lg border hover:bg-muted/30 transition-colors">
               <div className="flex items-center gap-3">
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center ${p.status === "pago" ? "bg-success/10" : p.status === "atrasado" ? "bg-destructive/10" : "bg-warning/10"}`}>
                   {p.status === "pago" ? <ArrowUpRight className="h-4 w-4 text-success" /> : p.status === "atrasado" ? <AlertTriangle className="h-4 w-4 text-destructive" /> : <CreditCard className="h-4 w-4 text-warning" />}
