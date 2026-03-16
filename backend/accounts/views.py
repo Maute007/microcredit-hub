@@ -169,11 +169,12 @@ class PermissionListView(APIView):
 
 class SystemSettingsView(APIView):
     """Leitura/actualização das configurações globais do sistema (nome, logo, cores).
-    Qualquer utilizador autenticado pode ler (necessário para o layout). Apenas staff pode alterar."""
+    GET é público — necessário na página de login para mostrar logo e cores.
+    PATCH/PUT exige staff."""
 
     def get_permissions(self):
         if self.request.method == "GET":
-            return [permissions.IsAuthenticated()]
+            return [permissions.AllowAny()]
         return [permissions.IsAdminUser()]
 
     def get(self, request):

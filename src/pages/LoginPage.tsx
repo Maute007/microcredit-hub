@@ -24,9 +24,10 @@ export default function LoginPage() {
     if (!authLoading && isAuthenticated) navigate(from, { replace: true });
   }, [authLoading, isAuthenticated, from, navigate]);
 
-  const { data: systemSettings } = useQuery<ApiSystemSettings>({
-    queryKey: ["system-settings"],
-    queryFn: systemApi.get,
+  const { data: systemSettings } = useQuery<ApiSystemSettings | null>({
+    queryKey: ["system-settings-public"],
+    queryFn: systemApi.getPublic,
+    staleTime: 5 * 60 * 1000,
   });
 
   const vendorName = "MAKIRA";

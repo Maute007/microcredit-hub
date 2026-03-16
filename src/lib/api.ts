@@ -209,6 +209,12 @@ export interface ApiSystemSettings {
 }
 
 export const systemApi = {
+  // Usado na LoginPage: fetch direto sem cookies nem handler de 401,
+  // para não disparar "sessão expirada" antes do utilizador fazer login.
+  getPublic: () =>
+    fetch(`${API_BASE}/auth/settings/`)
+      .then((r) => (r.ok ? (r.json() as Promise<ApiSystemSettings>) : Promise.resolve(null)))
+      .catch(() => null),
   get: () => fetchApi<ApiSystemSettings>("/auth/settings/"),
   update: (payload: Partial<Pick<ApiSystemSettings, "name" | "logo_url" | "primary_color" | "tagline" | "login_description" | "login_banner_color" | "login_card_color">>) =>
     fetchApi<ApiSystemSettings>("/auth/settings/", {
