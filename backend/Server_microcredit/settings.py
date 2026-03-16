@@ -4,6 +4,13 @@ from pathlib import Path
 
 from django.core.management.utils import get_random_secret_key
 
+# Carrega variáveis do ficheiro .env (se existir) antes de qualquer os.getenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+except ImportError:
+    pass  # python-dotenv não instalado — usa variáveis de ambiente do sistema
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -19,9 +26,11 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", get_random_secret_key())
 
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 
+# Inclui o domínio do frontend por defeito porque o Nginx do frontend
+# passa Host: euro-credito.makira7.com ao fazer proxy de /api/ para este socket
 ALLOWED_HOSTS: list[str] = _csv_env(
     "DJANGO_ALLOWED_HOSTS",
-    "euro-server.makira7.com,localhost,127.0.0.1",
+    "euro-server.makira7.com,euro-credito.makira7.com,localhost,127.0.0.1",
 )
 
 # Frontend origin (Vite default + optional env override)
