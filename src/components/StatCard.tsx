@@ -36,13 +36,15 @@ const sparkColorMap = {
 };
 
 function MiniSparkline({ data, color }: { data: number[]; color: string }) {
-  const max = Math.max(...data);
-  const min = Math.min(...data);
+  const valid = data.filter((v) => typeof v === "number" && Number.isFinite(v));
+  if (valid.length === 0) return null;
+  const max = Math.max(...valid);
+  const min = Math.min(...valid);
   const range = max - min || 1;
   const h = 32;
   const w = 80;
-  const points = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * w;
+  const points = valid.map((v, i) => {
+    const x = (i / Math.max(valid.length - 1, 1)) * w;
     const y = h - ((v - min) / range) * (h - 4) - 2;
     return `${x},${y}`;
   }).join(" ");
@@ -62,14 +64,16 @@ function MiniSparkline({ data, color }: { data: number[]; color: string }) {
 }
 
 function ProgressBar({ value, max, label, variant }: { value: number; max: number; label?: string; variant: string }) {
-  const pct = Math.min((value / max) * 100, 100);
+  const v = Number.isFinite(value) ? value : 0;
+  const m = Number.isFinite(max) && max > 0 ? max : 1;
+  const pct = Math.min((v / m) * 100, 100);
   const barColor = variant === "destructive" ? "bg-destructive" : variant === "warning" ? "bg-warning" : variant === "success" ? "bg-success" : "bg-primary";
 
   return (
     <div className="mt-2">
       <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
         <span>{label || `${Math.round(pct)}%`}</span>
-        <span>{value}/{max}</span>
+        <span>{v}/{m}</span>
       </div>
       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />

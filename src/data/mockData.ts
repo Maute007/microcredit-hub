@@ -294,16 +294,28 @@ export const mockAttendance: AttendanceRecord[] = [
   { employeeId: "F008", employeeName: "Mariana Sitoe", date: "2025-03-05", checkIn: "07:45", checkOut: "17:30", status: "presente", hoursWorked: 9.75 },
 ];
 
-// ==================== FORMATTERS ====================
+// ==================== FORMATTERS (pt-MZ) ====================
 
-export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("pt-MZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value) + " MT";
+export function formatCurrency(value: number | string | null | undefined): string {
+  const n = typeof value === "number" ? value : parseFloat(String(value ?? ""));
+  if (!Number.isFinite(n)) return "0,00 MT";
+  return new Intl.NumberFormat("pt-MZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n) + " MT";
 }
 
 export function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return new Date(dateStr).toLocaleDateString("pt-MZ", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+export function formatDateTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleString("pt-MZ", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export function formatMonthYear(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  return new Date(dateStr).toLocaleDateString("pt-MZ", { month: "long", year: "numeric" });
 }
