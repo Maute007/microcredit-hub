@@ -761,12 +761,13 @@ export default function LoansPage() {
   const calc = calcPayment();
 
   const loansList = loans ?? [];
+  const loansOpen = loansList.filter((l) => l.status !== "pago");
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : parseFloat(String(v ?? "")) || 0);
   const totalDisbursed = loansList.reduce((s, l) => s + num(l.amount), 0);
-  const totalRemaining = loansList.reduce((s, l) => s + num(l.remaining_balance), 0);
+  const totalRemaining = loansOpen.reduce((s, l) => s + num(l.remaining_balance), 0);
   const totalRecovered = totalDisbursed - totalRemaining;
-  const overdueLoans = loansList.filter((l) => l.status === "atrasado");
-  const activeLoans = loansList.filter((l) => l.status === "ativo" || l.status === "activo");
+  const overdueLoans = loansOpen.filter((l) => l.status === "atrasado");
+  const activeLoans = loansOpen.filter((l) => l.status === "ativo" || l.status === "activo");
 
   return (
     <div className="space-y-6">
@@ -1017,7 +1018,7 @@ export default function LoansPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           title="Total Empréstimos"
-          value={String(loansList.length)}
+          value={String(loansOpen.length)}
           icon={Wallet}
           subtitle={`${activeLoans.length} activos`}
           variant="primary"
@@ -1061,7 +1062,7 @@ export default function LoansPage() {
         <TabsContent value="loans" className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             {(["ativo", "pago", "atrasado", "pendente"] as const).map((s) => {
-              const n = loansList.filter((l) => l.status === s).length;
+              const n = loansOpen.filter((l) => l.status === s).length;
               return (
                 <div key={s} className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm bg-muted/50 border border-transparent">
                   <StatusBadge status={s} />
@@ -1072,7 +1073,7 @@ export default function LoansPage() {
           </div>
 
           <DataTable
-            data={loans ?? []}
+            data={loansOpen}
             columns={columns}
             searchKeys={["client_name", "id"]}
             loading={isLoading}
