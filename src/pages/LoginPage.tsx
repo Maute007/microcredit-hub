@@ -13,7 +13,7 @@ export default function LoginPage() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login, isAuthenticated } = useAuth();
+  const { login, isAuthenticated, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
@@ -21,8 +21,8 @@ export default function LoginPage() {
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/";
 
   useEffect(() => {
-    if (isAuthenticated) navigate(from, { replace: true });
-  }, [isAuthenticated, from, navigate]);
+    if (!authLoading && isAuthenticated) navigate(from, { replace: true });
+  }, [authLoading, isAuthenticated, from, navigate]);
 
   const { data: systemSettings } = useQuery<ApiSystemSettings>({
     queryKey: ["system-settings"],
@@ -57,6 +57,14 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/40">
+        <div className="animate-pulse text-muted-foreground text-sm">A verificar sessão...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4 py-8">

@@ -7,36 +7,39 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, user } = useAuth();
   const location = useLocation();
 
-  // Chamar sempre o hook de query, mas só activar depois de autenticado
   const {
     data: systemSettings,
     isLoading: settingsLoading,
   } = useQuery<ApiSystemSettings>({
     queryKey: ["system-settings"],
     queryFn: systemApi.get,
-    enabled: isAuthenticated, // evita 401 antes de login e mantém ordem de hooks estável
+    enabled: isAuthenticated,
   });
 
+  // Enquanto verifica autenticação — mostra tela neutra (não revela conteúdo protegido)
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">A carregar...</div>
+      <div className="min-h-screen flex items-center justify-center bg-muted/40">
+        <div className="animate-pulse text-muted-foreground text-sm">A verificar sessão...</div>
       </div>
     );
   }
 
+  // Não autenticado → redireciona para login, guarda origem para voltar depois
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // Autenticado mas ainda a carregar configurações do sistema
   if (settingsLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-muted-foreground">A verificar estado do sistema...</div>
+      <div className="min-h-screen flex items-center justify-center bg-muted/40">
+        <div className="animate-pulse text-muted-foreground text-sm">A carregar...</div>
       </div>
     );
   }
 
+  // Sistema bloqueado: apenas superutilizadores passam
   if (systemSettings?.is_locked && !user?.is_superuser) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted/40 px-4">
