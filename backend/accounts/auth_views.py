@@ -1,5 +1,4 @@
 from django.conf import settings
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
@@ -13,26 +12,20 @@ from .serializers import CustomTokenObtainPairSerializer
 
 
 def _set_jwt_cookies(response: Response, refresh: RefreshToken) -> None:
+    """Define cookies JWT como session cookies (sem max_age/expires).
+    O browser elimina-os automaticamente ao encerrar — sem sessão persistente."""
     refresh_str = str(refresh)
     access_str = str(refresh.access_token)
     secure = getattr(settings, "JWT_COOKIE_SECURE", False)
     samesite = getattr(settings, "JWT_COOKIE_SAMESITE", "Lax")
     access_cookie = getattr(settings, "JWT_ACCESS_COOKIE", "access_token")
     refresh_cookie = getattr(settings, "JWT_REFRESH_COOKIE", "refresh_token")
-    access_ttl = int(
-        getattr(settings, "SIMPLE_JWT", {})
-        .get("ACCESS_TOKEN_LIFETIME", timezone.timedelta(minutes=15))
-        .total_seconds()
-    )
-    refresh_ttl = int(
-        getattr(settings, "SIMPLE_JWT", {})
-        .get("REFRESH_TOKEN_LIFETIME", timezone.timedelta(days=7))
-        .total_seconds()
-    )
+    # Sem max_age → session cookie: desaparece ao fechar o browser.
+    # Os tokens JWT têm o seu próprio prazo de validade interno (access=15min,
+    # refresh=7dias), mas o cookie não persiste entre sessões do browser.
     response.set_cookie(
         access_cookie,
         access_str,
-        max_age=access_ttl,
         httponly=True,
         secure=secure,
         samesite=samesite,
@@ -40,7 +33,6 @@ def _set_jwt_cookies(response: Response, refresh: RefreshToken) -> None:
     response.set_cookie(
         refresh_cookie,
         refresh_str,
-        max_age=refresh_ttl,
         httponly=True,
         secure=secure,
         samesite=samesite,

@@ -31,7 +31,7 @@ const navItems: Array<{
   /** Permissão necessária para ver o módulo (ex: view_client). Se não definida, qualquer autenticado vê. */
   viewPermission?: string;
 }> = [
-  { title: "Dashboard", path: "/", icon: LayoutDashboard },
+  { title: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { title: "Clientes", path: "/clientes", icon: Users, viewPermission: "view_client" },
   { title: "Empréstimos", path: "/emprestimos", icon: Wallet, viewPermission: "view_loan" },
   { title: "Pagamentos", path: "/pagamentos", icon: CreditCard, viewPermission: "view_payment" },
@@ -74,7 +74,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const brandColor = systemSettings?.primary_color || undefined;
 
   const isActive = (path: string) =>
-    path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
+    path === "/dashboard"
+      ? location.pathname === "/dashboard"
+      : location.pathname.startsWith(path);
 
   const perms = user?.permissions ?? [];
   const hasViewPermission = (codename: string) =>

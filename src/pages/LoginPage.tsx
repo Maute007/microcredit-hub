@@ -18,7 +18,7 @@ export default function LoginPage() {
   const location = useLocation();
   const { toast } = useToast();
 
-  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/";
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/dashboard";
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) navigate(from, { replace: true });

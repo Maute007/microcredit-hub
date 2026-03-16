@@ -45,12 +45,16 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            {/* Página pública: login é a porta de entrada */}
+            {/* Raiz redireciona sempre para login — utilizadores autenticados são enviados
+                para /dashboard pelo LoginPage automaticamente */}
+            <Route path="/" element={<Navigate to="/login" replace />} />
+
+            {/* Página pública */}
             <Route path="/login" element={<LoginPage />} />
 
             {/* Rotas protegidas */}
             <Route
-              path="/"
+              path="/dashboard"
               element={
                 <ProtectedRoute>
                   <AppLayout>
