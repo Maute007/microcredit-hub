@@ -7,16 +7,27 @@ from django.core.management.utils import get_random_secret_key
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+
+def _csv_env(name: str, default: str = "") -> list[str]:
+    value = os.getenv(name, default)
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
 # SECURITY ---------------------------------------------------------------------
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", get_random_secret_key())
 
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 
-ALLOWED_HOSTS: list[str] = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+ALLOWED_HOSTS: list[str] = _csv_env(
+    "DJANGO_ALLOWED_HOSTS",
+    "euro-server.makira7.com,localhost,127.0.0.1",
+)
 
 # Frontend origin (Vite default + optional env override)
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://euro-credito.makira7.com").rstrip("/")
+BACKEND_URL = os.getenv("BACKEND_URL", "https://euro-server.makira7.com").rstrip("/")
+CORS_ALLOWED_ORIGINS_EXTRA = _csv_env("CORS_ALLOWED_ORIGINS_EXTRA", "")
 
 
 # APPLICATION DEFINITION ------------------------------------------------------
@@ -94,6 +105,22 @@ if os.getenv("DATABASE_URL"):
             conn_max_age=600,
             conn_health_checks=True,
         )
+    }
+elif os.getenv("POSTGRES_DB"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB", ""),
+            "USER": os.getenv("POSTGRES_USER", ""),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD", ""),
+            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+            "OPTIONS": {
+                "sslmode": os.getenv("POSTGRES_SSLMODE", "prefer"),
+            },
+            "CONN_MAX_AGE": 600,
+            "CONN_HEALTH_CHECKS": True,
+        }
     }
 else:
     DATABASES = {
@@ -225,11 +252,21 @@ JWT_COOKIE_SAMESITE = "Lax"
 
 # CORS & CSRF (comunicação segura com frontend) -------------------------------
 
-CORS_ALLOWED_ORIGINS = (
-    [FRONTEND_URL, "http://localhost:5173", "http://localhost:8080", "http://127.0.0.1:8080"]
-    if DEBUG
-    else [FRONTEND_URL]
-)
+if DEBUG:
+    CORS_ALLOWED_ORIGINS = list(
+        dict.fromkeys(
+            [
+                FRONTEND_URL,
+                "http://localhost:5173",
+                "http://localhost:8080",
+                "http://127.0.0.1:8080",
+                *CORS_ALLOWED_ORIGINS_EXTRA,
+            ]
+        )
+    )
+else:
+    CORS_ALLOWED_ORIGINS = list(dict.fromkeys([FRONTEND_URL, *CORS_ALLOWED_ORIGINS_EXTRA]))
+
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 CORS_ALLOW_CREDENTIALS = True
@@ -241,6 +278,8 @@ CSRF_COOKIE_HTTPONLY = False  # Django usa cookie CSRF legível pelo JS (header)
 
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 
 if not DEBUG:
     SECURE_HSTS_SECONDS = 60 * 60 * 24 * 7  # 7 dias

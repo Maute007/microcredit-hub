@@ -1,4 +1,5 @@
-const API_BASE = "/api";
+const rawApiBase = import.meta.env.VITE_API_BASE_URL?.trim();
+const API_BASE = rawApiBase ? rawApiBase.replace(/\/$/, "") : "/api";
 
 let onUnauthorized: (() => void) | null = null;
 let sessionExpired = false;
@@ -134,7 +135,7 @@ export const authApi = {
     const qs = "?" + new URLSearchParams(
       Object.entries(q).filter(([, v]) => v != null && v !== "") as [string, string][]
     ).toString();
-    return `${typeof window !== "undefined" ? window.location.origin : ""}${API_BASE}/auth/audit/${qs}`;
+    return `${API_BASE}/auth/audit/${qs}`;
   },
   auditDetail: (params: { entity?: string; source?: string; history_id: number }) => {
     const qs = "?" + new URLSearchParams(

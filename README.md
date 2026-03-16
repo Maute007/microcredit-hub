@@ -60,6 +60,32 @@ This project is built with:
 - shadcn-ui
 - Tailwind CSS
 
+## Configuração de produção (domínios)
+
+- Frontend: `https://euro-credito.makira7.com`
+- Backend API: `https://euro-server.makira7.com`
+
+### Frontend (`.env`)
+
+Copie `.env.example` para `.env` na raiz e ajuste:
+
+- `VITE_API_BASE_URL=https://euro-server.makira7.com/api`
+- `VITE_DEV_BACKEND_URL=http://127.0.0.1:8000` (apenas dev local)
+
+### Backend (`backend/.env`)
+
+Copie `backend/.env.example` para `backend/.env` e ajuste:
+
+- `DJANGO_DEBUG=False`
+- `DJANGO_ALLOWED_HOSTS=euro-server.makira7.com,localhost,127.0.0.1`
+- `FRONTEND_URL=https://euro-credito.makira7.com`
+- `BACKEND_URL=https://euro-server.makira7.com`
+
+### Banco de dados
+
+- Padrão: SQLite (sem configuração extra)
+- PostgreSQL (quando quiser ativar): definir `DATABASE_URL` **ou** variáveis `POSTGRES_*` no `backend/.env`
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
