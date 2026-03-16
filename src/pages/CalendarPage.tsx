@@ -161,7 +161,8 @@ function getEventLabel(e: ApiCalendarEvent): string {
     return e.employee_name?.split(" ")[0] || "Férias";
   }
   if (e.type === "other" && e.type_label) return e.type_label;
-  return e.title.slice(0, 12) + (e.title.length > 12 ? "…" : "");
+  const title = (e.title ?? "").trim() || "Evento";
+  return title.slice(0, 12) + (title.length > 12 ? "…" : "");
 }
 
 export default function CalendarPage() {

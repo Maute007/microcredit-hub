@@ -50,15 +50,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const username = (user?.username ?? "").trim();
   const initials = user
     ? [user.first_name, user.last_name]
         .filter(Boolean)
         .map((n) => n[0])
         .join("")
-        .toUpperCase() || user.username.slice(0, 2).toUpperCase()
+        .toUpperCase() || username.slice(0, 2).toUpperCase() || "US"
     : "?";
   const displayName = user
-    ? [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username
+    ? [user.first_name, user.last_name].filter(Boolean).join(" ") || username || "Utilizador"
     : "";
   const roleLabel = user?.profile?.job_title || user?.role?.name || "";
 
