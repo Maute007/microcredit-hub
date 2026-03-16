@@ -47,12 +47,23 @@ async function fetchApi<T>(
         },
   });
 
+  const contentType = res.headers.get("content-type") ?? "";
   const text = await res.text();
   let data: unknown;
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
     data = text;
+  }
+
+  // Se o servidor devolveu HTML em vez de JSON numa resposta 200, significa que
+  // a rota /api não existe neste servidor (ex: Nginx servindo index.html para tudo).
+  // Tratamos como 502 para não autenticar indevidamente.
+  if (res.ok && !contentType.includes("application/json") && typeof data === "string" && data.trimStart().startsWith("<")) {
+    throw new ApiError(
+      "O servidor de API não está acessível. Verifique VITE_API_BASE_URL.",
+      502
+    );
   }
 
   if (!res.ok) {

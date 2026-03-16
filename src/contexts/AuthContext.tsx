@@ -26,7 +26,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = useCallback(async () => {
     try {
       const data = await authApi.me();
-      setUser(data);
+      // Garante que recebemos um objecto de utilizador válido — não HTML nem string
+      if (data && typeof data === "object" && "id" in data && "username" in data) {
+        setUser(data);
+      } else {
+        setUser(null);
+      }
     } catch {
       setUser(null);
     }
