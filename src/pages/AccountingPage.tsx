@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { DataTable } from "@/components/DataTable";
@@ -12,11 +12,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatCurrency, formatDate } from "@/data/mockData";
 import { QueryErrorAlert } from "@/components/QueryErrorAlert";
 import { usePermissions } from "@/hooks/usePermissions";
-import { accountingApi, type ApiTransaction } from "@/lib/api";
+import {
+  accountingApi,
+  type ApiCompanyFinanceSettings,
+  type ApiFinancialOverview,
+  type ApiMonthlyFinanceSnapshot,
+  type ApiMonthlySnapshotActionLog,
+  type ApiTransaction,
+} from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, TrendingUp, TrendingDown, Wallet, ArrowUpRight, ArrowDownRight, Settings, Percent, Trash2, Pencil, MoreHorizontal } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from "recharts";
+import { useAuth } from "@/contexts/AuthContext";
 
 const columns = [
   { key: "id", label: "ID" },
@@ -58,6 +66,8 @@ export default function AccountingPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { canEditTransaction, canDeleteTransaction } = usePermissions();
+  const { user } = useAuth();
+  const canManageClosings = !!user && (user.is_staff || user.is_superuser);
 
   const { data: categoryResponse } = useQuery({
     queryKey: ["transactions-categories"],
@@ -118,6 +128,20 @@ export default function AccountingPage() {
     }),
   });
 
+  const { data: overview } = useQuery<ApiFinancialOverview>({
+    queryKey: ["transactions-overview", filterFrom, filterTo],
+    queryFn: () =>
+      accountingApi.overview({
+        date_from: filterFrom || undefined,
+        date_to: filterTo || undefined,
+      }),
+  });
+
+  const { data: financeSettings } = useQuery<ApiCompanyFinanceSettings>({
+    queryKey: ["finance-settings"],
+    queryFn: () => accountingApi.financeSettings.get(),
+  });
+
   const totalEntries = balance?.total_entradas ?? 0;
   const totalExits = balance?.total_saidas ?? 0;
 
@@ -170,6 +194,8 @@ export default function AccountingPage() {
   const [newCategory, setNewCategory] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newTaxId, setNewTaxId] = useState<string>("none");
+  const [openingBalanceInput, setOpeningBalanceInput] = useState("");
+  const [closeMonth, setCloseMonth] = useState(() => new Date().toISOString().slice(0, 7));
 
   const [simResult, setSimResult] = useState<{
     saldo_projetado: number;
@@ -219,6 +245,75 @@ export default function AccountingPage() {
       });
     },
   });
+
+  const saveFinanceSettingsMut = useMutation({
+    mutationFn: (payload: Partial<Pick<ApiCompanyFinanceSettings, "opening_balance">>) =>
+      accountingApi.financeSettings.update(payload),
+    onSuccess: async () => {
+      toast({ title: "Saldo inicial actualizado" });
+      await queryClient.invalidateQueries({ queryKey: ["finance-settings"] });
+      await queryClient.invalidateQueries({ queryKey: ["transactions-overview"] });
+      setOpeningBalanceInput("");
+    },
+    onError: (e: unknown) => {
+      toast({
+        title: "Erro ao guardar saldo inicial",
+        description: e instanceof Error ? e.message : "Não foi possível guardar",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const { data: monthlySnapshots = [] } = useQuery<ApiMonthlyFinanceSnapshot[]>({
+    queryKey: ["monthly-snapshots"],
+    queryFn: () => accountingApi.monthlySnapshots.list(),
+  });
+
+  const { data: snapshotAudit = [] } = useQuery<ApiMonthlySnapshotActionLog[]>({
+    queryKey: ["monthly-snapshot-audit"],
+    queryFn: () => accountingApi.monthlySnapshotAudit(),
+  });
+
+  const createSnapshotMut = useMutation({
+    mutationFn: (payload: { month: string }) => accountingApi.monthlySnapshots.create(payload),
+    onSuccess: async () => {
+      toast({ title: "Fecho mensal criado com sucesso" });
+      await queryClient.invalidateQueries({ queryKey: ["monthly-snapshots"] });
+    },
+    onError: (e: unknown) => {
+      toast({
+        title: "Erro ao criar fecho mensal",
+        description: e instanceof Error ? e.message : "Não foi possível criar o fecho",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const [reopenReason, setReopenReason] = useState("");
+  const [reopenId, setReopenId] = useState<number | null>(null);
+  const reopenSnapshotMut = useMutation({
+    mutationFn: (payload: { id: number; reason: string }) =>
+      accountingApi.monthlySnapshots.reopen(payload.id, { reason: payload.reason }),
+    onSuccess: async () => {
+      toast({ title: "Fecho reaberto" });
+      setReopenId(null);
+      setReopenReason("");
+      await queryClient.invalidateQueries({ queryKey: ["monthly-snapshots"] });
+      await queryClient.invalidateQueries({ queryKey: ["transactions-overview"] });
+    },
+    onError: (e: unknown) => {
+      toast({
+        title: "Erro ao reabrir fecho",
+        description: e instanceof Error ? e.message : "Não foi possível reabrir",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const snapshotsById = useMemo(
+    () => new Map(monthlySnapshots.map((s) => [s.id, s] as const)),
+    [monthlySnapshots]
+  );
 
   const entradasSerie = dailyFlow.map((d) => d.entrada);
   const saidasSerie = dailyFlow.map((d) => d.saida);
@@ -430,6 +525,10 @@ export default function AccountingPage() {
             <Wallet className="h-4 w-4 mr-1.5" />
             Transações
           </TabsTrigger>
+          <TabsTrigger value="overview" className="rounded-lg">
+            <TrendingUp className="h-4 w-4 mr-1.5" />
+            Visão Global
+          </TabsTrigger>
           <TabsTrigger value="settings" className="rounded-lg">
             <Percent className="h-4 w-4 mr-1.5" />
             Configurações
@@ -623,6 +722,303 @@ export default function AccountingPage() {
               </DropdownMenu>
             ) : undefined}
           />
+        </TabsContent>
+
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatCard
+              title="Entradas Consolidadas"
+              value={formatCurrency(overview?.entries.total_entries ?? 0)}
+              icon={TrendingUp}
+              variant="success"
+              subtitle="Contabilidade + Pagamentos"
+            />
+            <StatCard
+              title="Saídas Consolidadas"
+              value={formatCurrency(overview?.exits.total_exits ?? 0)}
+              icon={TrendingDown}
+              variant="destructive"
+              subtitle="Contabilidade + RH + Desembolso"
+            />
+            <StatCard
+              title="Saldo Real (Auditável)"
+              value={formatCurrency(overview?.consolidated_balance ?? 0)}
+              icon={Wallet}
+              variant={(overview?.consolidated_balance ?? 0) >= 0 ? "primary" : "destructive"}
+            />
+          </div>
+
+          <div className="rounded-2xl border bg-card p-5">
+            <h3 className="font-semibold mb-2">Regra de cálculo (sem inventar valores)</h3>
+            <p className="text-sm text-muted-foreground">
+              O saldo real usa apenas movimentos efetivamente registados: saldo inicial + entradas confirmadas - saídas confirmadas.
+              Valores “a receber” e “planejados” aparecem separados e não entram no saldo auditável.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border bg-card p-5">
+            <h3 className="font-semibold mb-3">Base financeira da empresa</h3>
+            <p className="text-sm text-muted-foreground mb-3">
+              Registe aqui o saldo inicial (caixa/capital de base). O sistema usa este valor para calcular
+              o saldo consolidado real com todos os movimentos dos módulos.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <Label>Saldo inicial (MT)</Label>
+                <Input
+                  type="number"
+                  className="mt-1 w-60"
+                  placeholder={String(financeSettings?.opening_balance ?? 0)}
+                  value={openingBalanceInput}
+                  onChange={(e) => setOpeningBalanceInput(e.target.value)}
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={saveFinanceSettingsMut.isPending || !openingBalanceInput.trim()}
+                onClick={() => {
+                  const value = parseFloat(openingBalanceInput) || 0;
+                  saveFinanceSettingsMut.mutate({ opening_balance: value });
+                }}
+              >
+                {saveFinanceSettingsMut.isPending ? "A guardar..." : "Guardar saldo inicial"}
+              </Button>
+            </div>
+            <p className="text-sm text-muted-foreground mt-3">
+              Saldo inicial actual:{" "}
+              <span className="font-medium text-foreground">
+                {formatCurrency(overview?.opening_balance ?? 0)}
+              </span>
+            </p>
+          </div>
+
+          <div className="rounded-2xl border bg-card p-5">
+            <h3 className="font-semibold mb-4">Composição das entradas</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Entradas manuais (Contabilidade)</p>
+                <p className="font-semibold mt-1">{formatCurrency(overview?.entries.accounting_entries ?? 0)}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Pagamentos recebidos</p>
+                <p className="font-semibold mt-1">{formatCurrency(overview?.entries.payments_received ?? 0)}</p>
+              </div>
+              <div className="rounded-lg border p-3 bg-muted/20">
+                <p className="text-muted-foreground">Total de entradas</p>
+                <p className="font-semibold mt-1">{formatCurrency(overview?.entries.total_entries ?? 0)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border bg-card p-5">
+            <h3 className="font-semibold mb-4">Composição das saídas</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-sm">
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Saídas manuais (Contabilidade)</p>
+                <p className="font-semibold mt-1">{formatCurrency(overview?.exits.accounting_exits ?? 0)}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Desembolso de empréstimos</p>
+                <p className="font-semibold mt-1">{formatCurrency(overview?.exits.loans_disbursed ?? 0)}</p>
+              </div>
+              <div className="rounded-lg border p-3">
+                <p className="text-muted-foreground">Folha salarial (RH)</p>
+                <p className="font-semibold mt-1">{formatCurrency(overview?.exits.hr_payroll_paid ?? 0)}</p>
+              </div>
+              <div className="rounded-lg border p-3 bg-muted/20">
+                <p className="text-muted-foreground">Total de saídas</p>
+                <p className="font-semibold mt-1">{formatCurrency(overview?.exits.total_exits ?? 0)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <StatCard
+              title="Carteira em aberto (a receber)"
+              value={formatCurrency(overview?.analysis.receivables_open ?? 0)}
+              icon={TrendingUp}
+              subtitle="Não entra no saldo real"
+            />
+            <StatCard
+              title="A receber em atraso"
+              value={formatCurrency(overview?.analysis.receivables_overdue ?? 0)}
+              icon={TrendingDown}
+              variant="destructive"
+              subtitle="Risco de cobrança"
+            />
+            <StatCard
+              title="Entradas futuras lançadas"
+              value={formatCurrency(overview?.analysis.scheduled_entries ?? 0)}
+              icon={ArrowUpRight}
+              subtitle="Planejado na contabilidade"
+            />
+            <StatCard
+              title="Saídas futuras lançadas"
+              value={formatCurrency(overview?.analysis.scheduled_exits ?? 0)}
+              icon={ArrowDownRight}
+              subtitle={`Impacto líquido futuro: ${formatCurrency(overview?.analysis.net_scheduled ?? 0)}`}
+            />
+          </div>
+
+          <div className="rounded-2xl border bg-card p-5 space-y-4">
+            <h3 className="font-semibold">Fecho mensal (snapshot auditável)</h3>
+            <p className="text-sm text-muted-foreground">
+              O fecho mensal guarda um retrato imutável do mês para auditoria e comparações históricas.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div>
+                <Label>Mês de fecho</Label>
+                <Input
+                  type="month"
+                  value={closeMonth}
+                  onChange={(e) => setCloseMonth(e.target.value)}
+                  className="mt-1 w-56"
+                />
+              </div>
+              <Button
+                type="button"
+                disabled={createSnapshotMut.isPending || !closeMonth}
+                onClick={() => createSnapshotMut.mutate({ month: closeMonth })}
+              >
+                {createSnapshotMut.isPending ? "A fechar..." : "Criar fecho mensal"}
+              </Button>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Mês</th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">Entradas</th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">Saídas</th>
+                    <th className="px-3 py-2 text-right font-medium text-muted-foreground">Saldo final</th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Criado por</th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Data</th>
+                    {canManageClosings && (
+                      <th className="px-3 py-2 text-right font-medium text-muted-foreground">Ações</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthlySnapshots.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                        Nenhum fecho mensal criado ainda.
+                      </td>
+                    </tr>
+                  ) : (
+                    monthlySnapshots.map((s) => (
+                      <tr key={s.id} className="border-b last:border-0">
+                        <td className="px-3 py-2 font-medium">{s.month}</td>
+                        <td className="px-3 py-2 text-right">{formatCurrency(s.total_entries)}</td>
+                        <td className="px-3 py-2 text-right">{formatCurrency(s.total_exits)}</td>
+                        <td className="px-3 py-2 text-right font-semibold">{formatCurrency(s.consolidated_balance)}</td>
+                        <td className="px-3 py-2">{s.created_by_name || "—"}</td>
+                        <td className="px-3 py-2">{formatDate(s.created_at)}</td>
+                        {canManageClosings && (
+                          <td className="px-3 py-2 text-right">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setReopenId(s.id)}
+                            >
+                              Reabrir
+                            </Button>
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <Dialog open={reopenId != null} onOpenChange={(o) => !o && setReopenId(null)}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Reabrir fecho mensal</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Isto vai anular o fecho e permitir criar um novo para o mesmo mês. Esta ação fica registada em auditoria.
+                  </p>
+                  <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                    <p>
+                      <span className="text-muted-foreground">Mês:</span>{" "}
+                      <span className="font-medium">
+                        {reopenId ? (snapshotsById.get(reopenId)?.month ?? "—") : "—"}
+                      </span>
+                    </p>
+                  </div>
+                  <div>
+                    <Label>Motivo (obrigatório)</Label>
+                    <Input
+                      className="mt-1"
+                      value={reopenReason}
+                      onChange={(e) => setReopenReason(e.target.value)}
+                      placeholder="Ex: Ajuste de lançamento atrasado"
+                    />
+                  </div>
+                  <div className="flex gap-2 justify-end pt-2">
+                    <Button variant="outline" onClick={() => setReopenId(null)} type="button">
+                      Cancelar
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      type="button"
+                      disabled={reopenSnapshotMut.isPending || !reopenReason.trim() || reopenId == null}
+                      onClick={() => {
+                        if (reopenId == null) return;
+                        reopenSnapshotMut.mutate({ id: reopenId, reason: reopenReason.trim() });
+                      }}
+                    >
+                      {reopenSnapshotMut.isPending ? "A reabrir..." : "Reabrir fecho"}
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="rounded-2xl border bg-card p-5 space-y-4">
+            <h3 className="font-semibold">Auditoria de fechos</h3>
+            <p className="text-sm text-muted-foreground">
+              Registo de reaberturas (quem, quando e porquê). Isto ajuda a manter a rastreabilidade e confiança no saldo auditável.
+            </p>
+            <div className="overflow-x-auto rounded-xl border">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/30">
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Mês</th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Ação</th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Motivo</th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Utilizador</th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snapshotAudit.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">
+                        Nenhuma ação registada ainda.
+                      </td>
+                    </tr>
+                  ) : (
+                    snapshotAudit.map((a) => (
+                      <tr key={a.id} className="border-b last:border-0">
+                        <td className="px-3 py-2 font-medium">{a.snapshot_month}</td>
+                        <td className="px-3 py-2">{a.action === "reopen" ? "Reabertura" : a.action}</td>
+                        <td className="px-3 py-2">{a.reason || "—"}</td>
+                        <td className="px-3 py-2">{a.user_name || "—"}</td>
+                        <td className="px-3 py-2">{formatDate(a.created_at)}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="settings">

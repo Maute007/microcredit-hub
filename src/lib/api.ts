@@ -934,6 +934,63 @@ export interface ApiTransaction {
   loan?: number | null;
 }
 
+export interface ApiFinancialOverview {
+  date_from: string | null;
+  date_to: string | null;
+  opening_balance: number;
+  entries: {
+    accounting_entries: number;
+    payments_received: number;
+    total_entries: number;
+  };
+  exits: {
+    accounting_exits: number;
+    loans_disbursed: number;
+    hr_payroll_paid: number;
+    total_exits: number;
+  };
+  real_balance: number;
+  consolidated_balance: number;
+  analysis: {
+    receivables_open: number;
+    receivables_overdue: number;
+    scheduled_entries: number;
+    scheduled_exits: number;
+    net_scheduled: number;
+  };
+}
+
+export interface ApiCompanyFinanceSettings {
+  id: number;
+  opening_balance: number;
+  updated_at: string;
+}
+
+export interface ApiMonthlyFinanceSnapshot {
+  id: number;
+  month: string;
+  date_from: string;
+  date_to: string;
+  opening_balance: number;
+  total_entries: number;
+  total_exits: number;
+  real_balance: number;
+  consolidated_balance: number;
+  created_by: number | null;
+  created_by_name: string;
+  created_at: string;
+}
+
+export interface ApiMonthlySnapshotActionLog {
+  id: number;
+  snapshot_month: string;
+  action: "reopen";
+  reason: string;
+  user: number | null;
+  user_name: string;
+  created_at: string;
+}
+
 export const accountingApi = {
   taxes: {
     list: () => fetchApi<Array<{ id: number; name: string; code: string; rate: number; scope: "ambos" | "entrada" | "saida"; is_active: boolean }>>("/taxes/?is_active=true"),
@@ -995,6 +1052,37 @@ export const accountingApi = {
       `/transactions/balance/${qs}`
     );
   },
+  overview: (params?: { date_from?: string; date_to?: string }) => {
+    const qs = params && Object.keys(params).length
+      ? "?" + new URLSearchParams(
+          Object.entries(params).filter(([, v]) => v != null && v !== "") as [string, string][]
+        ).toString()
+      : "";
+    return fetchApi<ApiFinancialOverview>(`/transactions/overview/${qs}`);
+  },
+  financeSettings: {
+    get: () => fetchApi<ApiCompanyFinanceSettings>("/transactions/finance-settings/"),
+    update: (payload: Partial<Pick<ApiCompanyFinanceSettings, "opening_balance">>) =>
+      fetchApi<ApiCompanyFinanceSettings>("/transactions/finance-settings/", {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      }),
+  },
+  monthlySnapshots: {
+    list: () => fetchApi<ApiMonthlyFinanceSnapshot[]>("/transactions/monthly-snapshots/"),
+    create: (payload: { month: string }) =>
+      fetchApi<ApiMonthlyFinanceSnapshot>("/transactions/monthly-snapshots/", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+    reopen: (id: number, payload: { reason?: string }) =>
+      fetchApi<{ detail: string }>(`/transactions/monthly-snapshots/${id}/reopen/`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
+  },
+  monthlySnapshotAudit: () =>
+    fetchApi<ApiMonthlySnapshotActionLog[]>("/transactions/monthly-snapshot-audit/"),
   categories: () =>
     fetchApi<{ categories: string[] }>("/transactions/categories/"),
   simulate: (payload: { type: "entrada" | "saida"; amount: number; date?: string }) =>

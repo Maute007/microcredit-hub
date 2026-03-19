@@ -792,89 +792,98 @@ export default function LoansPage() {
                 <DialogTitle>Novo Empréstimo</DialogTitle>
                 <p className="text-sm text-muted-foreground">Preencha os dados e ajuste juros e parcelas conforme necessário.</p>
               </DialogHeader>
-              <div className="space-y-5">
-                <div>
-                  <Label>Cliente</Label>
-                  <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                    <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
-                    <SelectContent>
-                      {(clients ?? [])
-                        .filter((c: ApiClient) => c.status === "ativo")
-                        .map((c: ApiClient) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Valor (MT)</Label>
-                    <Input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="Ex.: 50 000"
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <Label>Categoria</Label>
-                    <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-                      <SelectTrigger className="mt-1"><SelectValue placeholder="Sem categoria" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Sem categoria</SelectItem>
-                        {categories.filter((c) => c.is_active).map((cat) => (
-                          <SelectItem key={cat.id} value={String(cat.id)}>
-                            {cat.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {amt > 0 && suggestedCategories.length > 0 && (
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Sugerido para {formatCurrency(amt)}: {suggestedCategories[0].name}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Juros e parcelas — pode alterar manualmente
-                  </p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <Label>Juros (%)</Label>
-                      <Input
-                        type="number"
-                        value={rate}
-                        onChange={(e) => setRate(e.target.value)}
-                        placeholder="5"
-                        step={0.5}
-                        className="mt-1"
-                      />
-                    </div>
-                    <div>
-                      <Label>Nº parcelas</Label>
-                      <Input
-                        type="number"
-                        value={term}
-                        onChange={(e) => setTerm(e.target.value)}
-                        placeholder="12"
-                        min={1}
-                        className="mt-1"
-                      />
-                    </div>
-                  </div>
-                  {selectedCategoryId !== "none" && (
-                    <p className="text-xs text-muted-foreground">
-                      Valores sugeridos pela categoria — altere se precisar.
-                    </p>
-                  )}
-                </div>
+              <div className="space-y-4">
+                <Tabs defaultValue="dados" className="w-full">
+                  <TabsList className="grid grid-cols-2 w-full">
+                    <TabsTrigger value="dados">Dados do empréstimo</TabsTrigger>
+                    <TabsTrigger value="garantia">Item de garantia</TabsTrigger>
+                  </TabsList>
 
-                <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+                  <TabsContent value="dados" className="space-y-5 mt-4">
+                    <div>
+                      <Label>Cliente</Label>
+                      <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                        <SelectTrigger className="mt-1"><SelectValue placeholder="Selecionar cliente" /></SelectTrigger>
+                        <SelectContent>
+                          {(clients ?? [])
+                            .filter((c: ApiClient) => c.status === "ativo")
+                            .map((c: ApiClient) => (
+                              <SelectItem key={c.id} value={String(c.id)}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label>Valor (MT)</Label>
+                        <Input
+                          type="number"
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                          placeholder="Ex.: 50 000"
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label>Categoria</Label>
+                        <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
+                          <SelectTrigger className="mt-1"><SelectValue placeholder="Sem categoria" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Sem categoria</SelectItem>
+                            {categories.filter((c) => c.is_active).map((cat) => (
+                              <SelectItem key={cat.id} value={String(cat.id)}>
+                                {cat.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {amt > 0 && suggestedCategories.length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Sugerido para {formatCurrency(amt)}: {suggestedCategories[0].name}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                        Juros e parcelas — pode alterar manualmente
+                      </p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Juros (%)</Label>
+                          <Input
+                            type="number"
+                            value={rate}
+                            onChange={(e) => setRate(e.target.value)}
+                            placeholder="5"
+                            step={0.5}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label>Nº parcelas</Label>
+                          <Input
+                            type="number"
+                            value={term}
+                            onChange={(e) => setTerm(e.target.value)}
+                            placeholder="12"
+                            min={1}
+                            className="mt-1"
+                          />
+                        </div>
+                      </div>
+                      {selectedCategoryId !== "none" && (
+                        <p className="text-xs text-muted-foreground">
+                          Valores sugeridos pela categoria — altere se precisar.
+                        </p>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="garantia" className="mt-4">
+                    <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
                   <div className="flex items-center gap-2">
                     <ShieldCheck className="h-4 w-4 text-primary" />
                     <Label className="cursor-pointer flex-1">Item de garantia</Label>
@@ -951,6 +960,8 @@ export default function LoansPage() {
                     </div>
                   )}
                 </div>
+                  </TabsContent>
+                </Tabs>
 
                 {amount && term && (
                   <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2 animate-fade-in">

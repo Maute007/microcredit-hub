@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
@@ -133,3 +135,97 @@ class Transaction(models.Model):
         self.tax_amount = tax_amount
         self.total_amount = (base + tax_amount).quantize(Decimal("0.01"))
         super().save(*args, **kwargs)
+
+
+class CompanyFinanceSettings(models.Model):
+    """Configuração financeira global (singleton)."""
+
+    opening_balance = models.DecimalField(
+        max_digits=14,
+        decimal_places=2,
+        default=0,
+        verbose_name=_("Saldo inicial da empresa"),
+        help_text=_("Caixa/base inicial para cálculo do saldo real consolidado."),
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _("Configuração financeira")
+        verbose_name_plural = _("Configurações financeiras")
+
+    def __str__(self):
+        return f"Saldo inicial: {self.opening_balance} MT"
+
+    @classmethod
+    def get_solo(cls):
+        obj = cls.objects.first()
+        if obj:
+            return obj
+        return cls.objects.create(opening_balance=Decimal("0"))
+
+
+class MonthlyFinanceSnapshot(models.Model):
+    """Fecho financeiro mensal auditável."""
+
+    month = models.CharField(
+        max_length=7,
+        unique=True,
+        verbose_name=_("Mês (YYYY-MM)"),
+    )
+    date_from = models.DateField(verbose_name=_("Data inicial do período"))
+    date_to = models.DateField(verbose_name=_("Data final do período"))
+    opening_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_entries = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    total_exits = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    real_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    consolidated_balance = models.DecimalField(max_digits=14, decimal_places=2, default=0)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="monthly_finance_snapshots",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Fecho mensal financeiro")
+        verbose_name_plural = _("Fechos mensais financeiros")
+        ordering = ["-month"]
+        indexes = [models.Index(fields=["month"])]
+
+    def __str__(self):
+        return f"{self.month} - {self.consolidated_balance} MT"
+
+
+class MonthlySnapshotActionLog(models.Model):
+    """Auditoria de ações sobre fechos mensais (ex: reabertura/anulação)."""
+
+    ACTION_CHOICES = [
+        ("reopen", _("Reabertura")),
+    ]
+
+    snapshot_month = models.CharField(max_length=7, verbose_name=_("Mês (YYYY-MM)"))
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES, verbose_name=_("Ação"))
+    reason = models.CharField(max_length=255, blank=True, verbose_name=_("Motivo"))
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="monthly_snapshot_actions",
+        verbose_name=_("Utilizador"),
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Auditoria de fecho mensal")
+        verbose_name_plural = _("Auditoria de fechos mensais")
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["snapshot_month"]),
+            models.Index(fields=["action"]),
+        ]
+
+    def __str__(self):
+        return f"{self.snapshot_month} - {self.action}"
