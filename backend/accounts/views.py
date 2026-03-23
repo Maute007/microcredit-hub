@@ -8,7 +8,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Profile, Role, SystemSettings, User
-from .permissions import CanListPermissionsForRoles, CanPatchSystemSettings, RoleAwareDjangoModelPermissions
+from .permissions import (
+    CanListPermissionsForRoles,
+    CanPatchSystemSettings,
+    RoleAwareDjangoModelPermissions,
+    user_has_permission,
+)
 from .serializers import (
     PermissionSerializer,
     ProfileSerializer,
@@ -216,3 +221,71 @@ class SystemSettingsView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+class DebugPermissionsView(APIView):
+    """
+    Diagnóstico de permissões efetivas do utilizador autenticado.
+
+    Útil para confirmar porque um add/change/delete está a dar 403.
+    """
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        perms = sorted(user.get_all_permissions())
+        role_perms = []
+        role = getattr(user, "role", None)
+        if role is not None:
+            role_perms = sorted(
+                f"{p.content_type.app_label}.{p.codename}"
+                for p in role.permissions.select_related("content_type").all()
+            )
+
+        sample_checks = [
+            "clients.add_client",
+            "clients.change_client",
+            "clients.delete_client",
+            "loans.add_loan",
+            "loans.change_loan",
+            "loans.delete_loan",
+            "accounts.add_user",
+            "accounts.change_user",
+            "accounts.delete_user",
+            "accounting.add_transaction",
+            "accounting.change_transaction",
+            "accounting.delete_transaction",
+            "hr.add_employee",
+            "hr.change_employee",
+            "hr.delete_employee",
+        ]
+
+        checks = {
+            perm: {
+                "has_perm": bool(user.has_perm(perm)),
+                "role_fallback": bool(user_has_permission(user, perm)),
+            }
+            for perm in sample_checks
+        }
+
+        return Response(
+            {
+                "user": {
+                    "id": user.id,
+                    "username": user.username,
+                    "is_superuser": user.is_superuser,
+                    "is_staff": user.is_staff,
+                    "role": {
+                        "id": role.id if role else None,
+                        "code": role.code if role else None,
+                        "name": role.name if role else None,
+                    },
+                },
+                "effective_permissions_count": len(perms),
+                "effective_permissions": perms,
+                "role_permissions_count": len(role_perms),
+                "role_permissions": role_perms,
+                "checks": checks,
+            }
+        )
