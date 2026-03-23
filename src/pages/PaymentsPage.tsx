@@ -175,13 +175,12 @@ export default function PaymentsPage() {
     staleTime: 5 * 60 * 1000,
   });
 
-  // Ao selecionar empréstimo no novo pagamento, sugerir parcela e valor
+  // Ao selecionar empréstimo no novo pagamento, sugerir apenas a próxima parcela.
   useEffect(() => {
     if (!showNew || !selectedLoanId) return;
     const loan = loans.find((l) => String(l.id) === selectedLoanId);
     if (loan) {
       const nextInst = (loan.paid_installments ?? 0) + 1;
-      setAmount(String(loan.monthly_payment ?? ""));
       setInstallment(String(nextInst));
     }
   }, [showNew, selectedLoanId, loans]);
@@ -892,7 +891,7 @@ function PaymentForm({
             <span className="font-medium">{formatCurrency(loanMonthly)}</span>
           </div>
           <p className="text-xs text-muted-foreground pt-1">
-            Valor e parcela sugeridos com base na próxima prestação.
+            A parcela é sugerida automaticamente. O valor pode ser qualquer montante válido até ao máximo devido.
           </p>
         </div>
       )}

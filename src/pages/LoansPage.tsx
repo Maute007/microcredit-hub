@@ -881,8 +881,12 @@ export default function LoansPage() {
     selectedCategoryId !== "none"
       ? categories.find((c) => String(c.id) === selectedCategoryId)
       : undefined;
-  const previewRate = parseFloat(rate) || 0;
-  const previewTerm = parseInt(term, 10) || 1;
+  const previewRate = selectedNewLoanCategory
+    ? Number(selectedNewLoanCategory.default_interest_rate ?? 0)
+    : (parseFloat(rate) || 0);
+  const previewTerm = selectedNewLoanCategory
+    ? Math.max(1, Number(selectedNewLoanCategory.default_term_months ?? 1))
+    : (parseInt(term, 10) || 1);
   const calc = computeLoanPreview(amt, previewRate, previewTerm);
 
   const loansList = loans ?? [];
@@ -1160,8 +1164,12 @@ export default function LoansPage() {
                   onClick={() => {
                     const client = parseInt(selectedClientId, 10);
                     const a = parseFloat(amount) || 0;
-                    const r = parseFloat(rate) || 0;
-                    const t = parseInt(term, 10) || 1;
+                    const r = selectedNewLoanCategory
+                      ? Number(selectedNewLoanCategory.default_interest_rate ?? 0)
+                      : (parseFloat(rate) || 0);
+                    const t = selectedNewLoanCategory
+                      ? Math.max(1, Number(selectedNewLoanCategory.default_term_months ?? 1))
+                      : (parseInt(term, 10) || 1);
                     const today = new Date();
                     const start_date = today.toISOString().slice(0, 10);
                     const end = new Date(today);

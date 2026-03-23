@@ -62,6 +62,8 @@ export function usePermissions() {
   const canViewUser = hasPermission("view_user");
   const canAddUser = hasPermission("add_user");
   const canEditUser = hasPermission("change_user");
+  // Alias para evitar regressão em páginas que usam "canChangeUser"
+  const canChangeUser = canEditUser;
   const canDeleteUser = hasPermission("delete_user");
 
   // Papéis (accounts.role)
@@ -122,6 +124,7 @@ export function usePermissions() {
     canViewUser,
     canAddUser,
     canEditUser,
+    canChangeUser,
     canDeleteUser,
     canViewRole,
     canAddRole,

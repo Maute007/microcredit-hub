@@ -56,6 +56,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshUser().finally(() => setIsLoading(false));
   }, [refreshUser]);
 
+  useEffect(() => {
+    if (!user) return;
+    let stopped = false;
+
+    const silentRefresh = async () => {
+      try {
+        await authApi.refresh();
+        if (!stopped) setSessionExpired(false);
+      } catch {
+        // O fluxo normal de 401->refresh->retry continua no fetchApi.
+      }
+    };
+
+    // Mantém access token vivo antes da expiração (~15min por omissão no backend).
+    const id = window.setInterval(silentRefresh, 10 * 60 * 1000);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void silentRefresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [user]);
+
   return (
     <AuthContext.Provider
       value={{

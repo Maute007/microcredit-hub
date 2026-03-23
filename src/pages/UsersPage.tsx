@@ -48,7 +48,23 @@ import {
   loginBannerSubtitleText,
   loginBannerTitleText,
 } from "@/lib/loginBannerStyles";
-import { Shield, UserPlus, Users, Settings2, Trash2, Pencil, CheckCircle2, XCircle, HelpCircle } from "lucide-react";
+import { Shield, UserPlus, Users, Settings2, Trash2, Pencil, CheckCircle2, XCircle, HelpCircle, MoreHorizontal } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const userColumns = [
   {
@@ -89,6 +105,7 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<ApiUser | null>(null);
   const [editingRole, setEditingRole] = useState<ApiRole | null>(null);
   const [showNewRole, setShowNewRole] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<ApiUser | null>(null);
 
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -106,7 +123,7 @@ export default function UsersPage() {
     canChangeSystemSettings,
   } = usePermissions();
 
-  const showUsersTab = canViewUser || canAddUser;
+  const showUsersTab = canViewUser || canAddUser || canChangeUser || canDeleteUser;
   const showRolesTab = canViewRole || canAddRole || canChangeRole || canDeleteRole;
   const showSettingsTab = canViewSystemSettings || canChangeSystemSettings;
   const defaultTab = showUsersTab ? "users" : showRolesTab ? "roles" : "settings";
@@ -114,7 +131,7 @@ export default function UsersPage() {
   const { data: users = [], isError: usersError, refetch: refetchUsers } = useQuery<ApiUser[]>({
     queryKey: ["users"],
     queryFn: usersApi.list,
-    enabled: canViewUser,
+    enabled: showUsersTab,
   });
 
   const { data: roles = [] } = useQuery<ApiRole[]>({
@@ -216,6 +233,8 @@ export default function UsersPage() {
   const visibleUsers = (users ?? []).filter((u) =>
     authUser?.is_superuser ? true : !u.is_superuser,
   );
+  const activeUsers = visibleUsers.filter((u) => u.is_active).length;
+  const inactiveUsers = visibleUsers.length - activeUsers;
 
   return (
     <div>
@@ -277,11 +296,52 @@ export default function UsersPage() {
 
         {showUsersTab && (
         <TabsContent value="users" className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="rounded-xl border bg-gradient-to-br from-primary/10 to-primary/5 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Utilizadores visíveis</p>
+              <p className="text-2xl font-bold mt-1">{visibleUsers.length}</p>
+            </div>
+            <div className="rounded-xl border bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Activos</p>
+              <p className="text-2xl font-bold mt-1 text-emerald-700 dark:text-emerald-300">{activeUsers}</p>
+            </div>
+            <div className="rounded-xl border bg-gradient-to-br from-slate-500/10 to-slate-500/5 p-4">
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">Inactivos</p>
+              <p className="text-2xl font-bold mt-1 text-slate-700 dark:text-slate-300">{inactiveUsers}</p>
+            </div>
+          </div>
+
           <DataTable
             data={visibleUsers}
             columns={userColumns}
             searchKeys={["username", "email", "employee_name"]}
-            onRowClick={canViewUser || canChangeUser ? setEditingUser : undefined}
+            onRowClick={canViewUser || canChangeUser || canDeleteUser ? setEditingUser : undefined}
+            renderRowActions={(canChangeUser || canDeleteUser) ? (u) => (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                  {canChangeUser && (
+                    <DropdownMenuItem onClick={() => setEditingUser(u)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Editar
+                    </DropdownMenuItem>
+                  )}
+                  {canDeleteUser && (
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => setDeletingUser(u)}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Eliminar
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : undefined}
           />
 
           <Dialog open={!!editingUser} onOpenChange={(o) => !o && setEditingUser(null)}>
@@ -306,14 +366,39 @@ export default function UsersPage() {
                   }
                   onDelete={() => {
                     if (editingUser) {
-                      deleteUser.mutate(editingUser.id);
-                      setEditingUser(null);
+                      setDeletingUser(editingUser);
                     }
                   }}
                 />
               )}
             </DialogContent>
           </Dialog>
+
+          <AlertDialog open={!!deletingUser} onOpenChange={(o) => !o && setDeletingUser(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Eliminar utilizador?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta acção remove o utilizador{" "}
+                  <strong>{deletingUser?.username}</strong> e não pode ser desfeita.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  onClick={() => {
+                    if (!deletingUser) return;
+                    deleteUser.mutate(deletingUser.id);
+                    if (editingUser?.id === deletingUser.id) setEditingUser(null);
+                    setDeletingUser(null);
+                  }}
+                >
+                  Eliminar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </TabsContent>
         )}
 
@@ -618,7 +703,7 @@ function UserForm({
         </div>
       )}
       <div className="pt-2 flex justify-between gap-2">
-        {initial && onDelete && canDelete && !readOnly && (
+        {initial && onDelete && canDelete && (
           <Button
             type="button"
             variant="ghost"
