@@ -125,7 +125,7 @@ class UserSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer(read_only=True)
     role = RoleMinimalSerializer(read_only=True)
     role_id = serializers.PrimaryKeyRelatedField(
-        queryset=Role.objects.all(),
+        queryset=Role.objects.all(),  # restrito em __init__ para não-superuser
         source="role",
         write_only=True,
         required=False,
@@ -168,11 +168,48 @@ class UserSerializer(serializers.ModelSerializer):
             "is_superuser": {"default": False},
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        actor = getattr(request, "user", None) if request else None
+        acting_super = bool(actor and actor.is_authenticated and actor.is_superuser)
+        field = self.fields.get("role_id")
+        if field is not None:
+            rq = Role.objects.all()
+            if not acting_super:
+                rq = rq.exclude(code="superuser")
+            field.queryset = rq
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        actor = getattr(request, "user", None) if request else None
+        if not (actor and getattr(actor, "is_authenticated", False) and actor.is_superuser):
+            data.pop("is_superuser", None)
+            data.pop("is_staff", None)
+        return data
+
     def validate(self, attrs):
         request = self.context.get("request")
         actor = getattr(request, "user", None) if request else None
         acting_super = bool(actor and actor.is_authenticated and actor.is_superuser)
         if not acting_super:
+            if attrs.get("is_superuser") is True:
+                raise serializers.ValidationError(
+                    {
+                        "is_superuser": [
+                            "Apenas um superutilizador pode criar ou promover a superutilizador."
+                        ]
+                    }
+                )
+            if attrs.get("is_staff") is True:
+                raise serializers.ValidationError(
+                    {
+                        "is_staff": [
+                            "Apenas um superutilizador pode atribuir estado de staff."
+                        ]
+                    }
+                )
             attrs.pop("is_superuser", None)
             attrs.pop("is_staff", None)
         role = attrs.get("role")

@@ -129,7 +129,7 @@ class LoanViewSet(ModelViewSet):
 
 class LoanCategoryViewSet(ModelViewSet):
     serializer_class = LoanCategorySerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.DjangoModelPermissions]
     pagination_class = None
 
     @action(detail=False, methods=["get"], url_path="suggest", permission_classes=[permissions.IsAuthenticated])
