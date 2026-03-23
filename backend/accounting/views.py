@@ -11,6 +11,8 @@ from validators import MAX_PAGE_SIZE
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from accounts.permissions import RoleAwareDjangoModelPermissions, user_has_permission
+
 from .models import (
     CompanyFinanceSettings,
     MonthlyFinanceSnapshot,
@@ -52,7 +54,7 @@ COMMON_CATEGORIES = [
 
 class TransactionViewSet(ModelViewSet):
     serializer_class = TransactionSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = TransactionPagination
 
     def get_queryset(self):
@@ -281,7 +283,7 @@ class TransactionViewSet(ModelViewSet):
         settings_obj = CompanyFinanceSettings.get_solo()
         if request.method == "GET":
             return Response(CompanyFinanceSettingsSerializer(settings_obj).data)
-        if not request.user.has_perm("accounting.change_transaction"):
+        if not user_has_permission(request.user, "accounting.change_transaction"):
             return Response({"detail": "Sem permissão."}, status=status.HTTP_403_FORBIDDEN)
         serializer = CompanyFinanceSettingsSerializer(
             settings_obj, data=request.data, partial=True
@@ -296,7 +298,7 @@ class TransactionViewSet(ModelViewSet):
             qs = MonthlyFinanceSnapshot.objects.select_related("created_by").all().order_by("-month")
             return Response(MonthlyFinanceSnapshotSerializer(qs, many=True).data)
 
-        if not request.user.has_perm("accounting.change_transaction"):
+        if not user_has_permission(request.user, "accounting.change_transaction"):
             return Response({"detail": "Sem permissão."}, status=status.HTTP_403_FORBIDDEN)
 
         month = (request.data.get("month") or "").strip()
@@ -330,7 +332,7 @@ class TransactionViewSet(ModelViewSet):
     @action(detail=False, methods=["post"], url_path=r"monthly-snapshots/(?P<pk>[^/.]+)/reopen")
     def reopen_monthly_snapshot(self, request, pk=None):
         """Reabre (anula) um fecho mensal. Apenas staff/superuser, com motivo."""
-        if not (request.user and (request.user.is_staff or request.user.is_superuser)):
+        if not user_has_permission(request.user, "accounting.change_transaction"):
             return Response({"detail": "Sem permissão."}, status=status.HTTP_403_FORBIDDEN)
         try:
             snap = MonthlyFinanceSnapshot.objects.get(pk=pk)
@@ -356,7 +358,7 @@ class TransactionViewSet(ModelViewSet):
 
 class TaxViewSet(ModelViewSet):
     serializer_class = TaxSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = None
 
     def get_queryset(self):

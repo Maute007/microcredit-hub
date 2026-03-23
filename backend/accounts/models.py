@@ -38,9 +38,11 @@ class Role(models.Model):
 
 
 class User(AbstractUser):
-    """Usuário customizado. Login por username ou email.
-    Permissões: herda de role.permissions + user_permissions.
-    get_all_permissions inclui role para que DjangoModelPermissions funcione.
+    """Utilizador customizado. Login por username ou email.
+
+    As permissões do papel (Role.permissions) entram em has_perm() via
+    ``UsernameOrEmailBackend.get_all_permissions`` — no Django 5+ o modelo
+    não pode só sobrescrever get_all_permissions: o ORM usa os backends.
     """
 
     role = models.ForeignKey(
@@ -52,16 +54,6 @@ class User(AbstractUser):
         verbose_name=_("Papel"),
     )
     history = HistoricalRecords()
-
-    def get_all_permissions(self, obj=None):
-        """Inclui permissões do papel (role) para DjangoModelPermissions."""
-        perms = set(super().get_all_permissions(obj))
-        if self.role_id:
-            from django.contrib.contenttypes.models import ContentType
-
-            for p in self.role.permissions.select_related("content_type"):
-                perms.add(f"{p.content_type.app_label}.{p.codename}")
-        return perms
 
     class Meta:
         verbose_name = _("Usuário")

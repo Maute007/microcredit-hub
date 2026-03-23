@@ -255,9 +255,10 @@ SIMPLE_JWT = {
 AUTH_USER_MODEL = "accounts.User"
 
 # Login por username ou email
+# Só UsernameOrEmailBackend: inclui permissões do Role no get_all_permissions().
+# Não duplicar ModelBackend — esse ignoraria o papel e quebrava DjangoModelPermissions (DELETE, etc.).
 AUTHENTICATION_BACKENDS = [
     "accounts.backends.UsernameOrEmailBackend",
-    "django.contrib.auth.backends.ModelBackend",
 ]
 
 # Cookies para JWT (tokens em cookies HttpOnly + SameSite)

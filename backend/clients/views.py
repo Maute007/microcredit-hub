@@ -7,6 +7,8 @@ from validators import MAX_PAGE_SIZE
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from accounts.permissions import RoleAwareDjangoModelPermissions
+
 from .models import Client
 from .serializers import ClientSerializer
 
@@ -19,7 +21,7 @@ class ClientPagination(PageNumberPagination):
 
 class ClientViewSet(ModelViewSet):
     serializer_class = ClientSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = ClientPagination
 
     def get_queryset(self):

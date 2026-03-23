@@ -1,6 +1,51 @@
-"""Permissões DRF para o módulo de contas (além de DjangoModelPermissions)."""
+"""Permissões DRF para o módulo de contas."""
 
+from django.contrib.auth.models import Permission
 from rest_framework import permissions
+
+
+def user_has_permission(user, perm: str) -> bool:
+    """
+    Verifica permissões reais do utilizador.
+
+    Prioriza user.has_perm() e, como fallback, consulta o papel (Role.permissions)
+    para cobrir cenários em que o backend de auth não agrega role perms.
+    """
+    if not user or not user.is_authenticated:
+        return False
+    if user.is_superuser:
+        return True
+    if user.has_perm(perm):
+        return True
+    role_id = getattr(user, "role_id", None)
+    if not role_id:
+        return False
+    app_label, codename = perm.split(".", 1)
+    return Permission.objects.filter(
+        role_set__pk=role_id,
+        content_type__app_label=app_label,
+        codename=codename,
+    ).exists()
+
+
+class RoleAwareDjangoModelPermissions(permissions.DjangoModelPermissions):
+    """
+    Igual ao DjangoModelPermissions, com fallback ao papel (Role.permissions).
+    """
+
+    def has_permission(self, request, view):
+        if super().has_permission(request, view):
+            return True
+
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.is_superuser:
+            return True
+
+        queryset = self._queryset(view)
+        perms = self.get_required_permissions(request.method, queryset.model)
+        return all(user_has_permission(user, perm) for perm in perms)
 
 
 class CanListPermissionsForRoles(permissions.BasePermission):
@@ -13,15 +58,13 @@ class CanListPermissionsForRoles(permissions.BasePermission):
         u = request.user
         if not u or not u.is_authenticated:
             return False
-        if u.is_superuser:
-            return True
         return (
-            u.has_perm("accounts.view_role")
-            or u.has_perm("accounts.change_role")
-            or u.has_perm("accounts.add_role")
-            or u.has_perm("accounts.view_user")
-            or u.has_perm("accounts.change_user")
-            or u.has_perm("accounts.add_user")
+            user_has_permission(u, "accounts.view_role")
+            or user_has_permission(u, "accounts.change_role")
+            or user_has_permission(u, "accounts.add_role")
+            or user_has_permission(u, "accounts.view_user")
+            or user_has_permission(u, "accounts.change_user")
+            or user_has_permission(u, "accounts.add_user")
         )
 
 
@@ -32,4 +75,4 @@ class CanPatchSystemSettings(permissions.BasePermission):
         u = request.user
         if not u or not u.is_authenticated:
             return False
-        return u.is_superuser or u.has_perm("accounts.change_systemsettings")
+        return user_has_permission(u, "accounts.change_systemsettings")

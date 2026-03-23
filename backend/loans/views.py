@@ -9,6 +9,8 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from accounts.permissions import RoleAwareDjangoModelPermissions
+
 from validators import MAX_PAGE_SIZE
 
 from .models import Loan, LoanCategory, Payment
@@ -30,7 +32,7 @@ class PaymentPagination(PageNumberPagination):
 
 class LoanViewSet(ModelViewSet):
     serializer_class = LoanSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = LoanPagination
 
     def get_queryset(self):
@@ -129,7 +131,7 @@ class LoanViewSet(ModelViewSet):
 
 class LoanCategoryViewSet(ModelViewSet):
     serializer_class = LoanCategorySerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = None
 
     @action(detail=False, methods=["get"], url_path="suggest", permission_classes=[permissions.IsAuthenticated])
@@ -160,7 +162,7 @@ class LoanCategoryViewSet(ModelViewSet):
 
 class PaymentViewSet(ModelViewSet):
     serializer_class = PaymentSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = PaymentPagination
 
     @action(detail=False, methods=["get"], url_path="summary")

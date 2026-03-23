@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Profile, Role, SystemSettings, User
-from .permissions import CanListPermissionsForRoles, CanPatchSystemSettings
+from .permissions import CanListPermissionsForRoles, CanPatchSystemSettings, RoleAwareDjangoModelPermissions
 from .serializers import (
     PermissionSerializer,
     ProfileSerializer,
@@ -46,7 +46,7 @@ class UserViewSet(viewsets.ModelViewSet):
     """CRUD de usuários. Queryset otimizado para evitar N+1."""
 
     serializer_class = UserSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
 
     def get_queryset(self):
         qs = _user_queryset()
@@ -89,7 +89,7 @@ class ProfileViewSet(viewsets.ModelViewSet):
     """CRUD de perfis (ligados a User)."""
 
     serializer_class = ProfileSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
 
     def get_queryset(self):
         qs = Profile.objects.select_related("user").order_by("id")
@@ -102,7 +102,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     """CRUD de papéis com permissões dinâmicas. Evita N+1."""
 
     serializer_class = RoleSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     search_fields = ["code", "name"]
     filterset_fields = ["is_system"]
     ordering_fields = ["id", "code", "name"]

@@ -7,6 +7,8 @@ from validators import MAX_PAGE_SIZE
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from accounts.permissions import RoleAwareDjangoModelPermissions
+
 from .models import AttendanceRecord, Employee, HRSettings, PayrollAdjustment, SalarySlip, Vacation
 from .serializers import (
     AttendanceRecordSerializer,
@@ -27,7 +29,7 @@ class StandardPagination(PageNumberPagination):
 
 class EmployeeViewSet(ModelViewSet):
     serializer_class = EmployeeSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = StandardPagination
 
     def get_queryset(self):
@@ -55,7 +57,7 @@ class EmployeeViewSet(ModelViewSet):
 
 class VacationViewSet(ModelViewSet):
     serializer_class = VacationSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = StandardPagination
 
     def get_queryset(self):
@@ -68,7 +70,7 @@ class VacationViewSet(ModelViewSet):
 
 class AttendanceRecordViewSet(ModelViewSet):
     serializer_class = AttendanceRecordSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = StandardPagination
 
     def get_queryset(self):
@@ -151,7 +153,7 @@ class AttendanceRecordViewSet(ModelViewSet):
 
 class HRSettingsViewSet(ModelViewSet):
     serializer_class = HRSettingsSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = None
 
     def get_queryset(self):
@@ -181,7 +183,7 @@ class HRSettingsViewSet(ModelViewSet):
 
 class SalarySlipViewSet(ModelViewSet):
     serializer_class = SalarySlipSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = StandardPagination
 
     def get_queryset(self):
@@ -308,7 +310,7 @@ class SalarySlipViewSet(ModelViewSet):
 
 class PayrollAdjustmentViewSet(ModelViewSet):
     serializer_class = PayrollAdjustmentSerializer
-    permission_classes = [permissions.DjangoModelPermissions]
+    permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = StandardPagination
 
     def get_queryset(self):

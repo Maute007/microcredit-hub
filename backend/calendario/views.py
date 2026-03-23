@@ -9,6 +9,8 @@ from rest_framework.views import APIView
 from hr.models import Vacation
 from loans.models import Loan
 
+from accounts.permissions import user_has_permission
+
 from .models import CalendarEvent
 from .serializers import CalendarEventSerializer
 
@@ -17,7 +19,7 @@ class CanViewCalendario(permissions.BasePermission):
     """Exige view_calendarevent para leitura do calendário."""
 
     def has_permission(self, request, view):
-        return request.user.has_perm("calendario.view_calendarevent")
+        return user_has_permission(request.user, "calendario.view_calendarevent")
 
 
 class CalendarioCRUDPermissions(permissions.BasePermission):
@@ -25,13 +27,13 @@ class CalendarioCRUDPermissions(permissions.BasePermission):
 
     def has_permission(self, request, view):
         if request.method in ("GET", "HEAD", "OPTIONS"):
-            return request.user.has_perm("calendario.view_calendarevent")
+            return user_has_permission(request.user, "calendario.view_calendarevent")
         if request.method == "POST":
-            return request.user.has_perm("calendario.add_calendarevent")
+            return user_has_permission(request.user, "calendario.add_calendarevent")
         if request.method in ("PUT", "PATCH"):
-            return request.user.has_perm("calendario.change_calendarevent")
+            return user_has_permission(request.user, "calendario.change_calendarevent")
         if request.method == "DELETE":
-            return request.user.has_perm("calendario.delete_calendarevent")
+            return user_has_permission(request.user, "calendario.delete_calendarevent")
         return False
 
 
