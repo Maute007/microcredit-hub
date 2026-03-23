@@ -8,7 +8,8 @@ Uso:
   python manage.py reset_environment --confirm --demo-users --password=SenhaForte123
 
 Após reset, o superutilizador bootstrap (BOOTSTRAP_SUPERUSER_USERNAME / _PASSWORD em settings ou .env)
-é criado automaticamente. Opcionalmente --admin-password cria também o utilizador "admin".
+é criado automaticamente. Opcionalmente --admin-password cria também o utilizador interno "admin"
+com papel "admin" (não superutilizador).
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from accounts.models import Profile, Role, SystemSettings, User
 
 
 class Command(BaseCommand):
-    help = "Flush da base de dados + seed de papéis (e opcionalmente utilizadores demo / admin)"
+    help = "Flush da base de dados + seed de papéis (e opcionalmente utilizadores demo / admin interno)"
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -42,7 +43,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--admin-password",
             default="",
-            help='Se definido, cria ou actualiza o utilizador "admin" como superutilizador Django.',
+            help='Se definido, cria ou actualiza o utilizador "admin" como administrador interno.',
         )
 
     def handle(self, *args, **options):
@@ -74,29 +75,30 @@ class Command(BaseCommand):
 
         admin_pwd = (options.get("admin_password") or "").strip()
         if admin_pwd:
-            role_super = Role.objects.filter(code="superuser").first()
+            role_admin = Role.objects.filter(code="admin").first()
+            if role_admin is None:
+                raise CommandError('Papel "admin" não encontrado. Execute seed_roles primeiro.')
             admin, created = User.objects.get_or_create(
                 username="admin",
                 defaults={
                     "email": "admin@local",
-                    "first_name": "Administrador",
+                    "first_name": "Administrador Interno",
                     "last_name": "",
                     "is_active": True,
                     "is_staff": True,
-                    "is_superuser": True,
-                    "role": role_super,
+                    "is_superuser": False,
+                    "role": role_admin,
                 },
             )
             if not created:
-                admin.is_superuser = True
+                admin.is_superuser = False
                 admin.is_staff = True
                 admin.is_active = True
-                if role_super:
-                    admin.role = role_super
+                admin.role = role_admin
                 admin.save()
             admin.set_password(admin_pwd)
             admin.save()
             Profile.objects.get_or_create(user=admin)
-            self.stdout.write(self.style.SUCCESS('Superutilizador "admin" criado ou actualizado.'))
+            self.stdout.write(self.style.SUCCESS('Administrador interno "admin" criado ou actualizado.'))
 
         self.stdout.write(self.style.SUCCESS("reset_environment concluído."))

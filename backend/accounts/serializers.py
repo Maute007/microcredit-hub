@@ -10,6 +10,14 @@ from .models import Profile, Role, SystemSettings
 User = get_user_model()
 
 
+def _resolve_default_role() -> Role | None:
+    """
+    Papel padrão para novos utilizadores quando role_id não é informado.
+    Regra atual: admin primeiro; fallback para default.
+    """
+    return Role.objects.filter(code="admin").first() or Role.objects.filter(code="default").first()
+
+
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Login com identifier (username ou email) + password."""
 
@@ -223,6 +231,8 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         password = validated_data.pop("password", None)
         role = validated_data.pop("role", None)
+        if role is None:
+            role = _resolve_default_role()
         employee = validated_data.pop("employee", None)
         user = User.objects.create(**validated_data, role=role)
         if password:
