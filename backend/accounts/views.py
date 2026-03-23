@@ -85,7 +85,7 @@ class UserViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         if instance.is_superuser and not self.request.user.is_superuser:
             raise PermissionDenied(
-                detail="Apenas um superutilizador pode eliminar outro superutilizador.",
+                detail="Não tem permissão para eliminar este utilizador.",
             )
         super().perform_destroy(instance)
 
@@ -117,7 +117,7 @@ class RoleViewSet(viewsets.ModelViewSet):
             Prefetch("permissions", queryset=Permission.objects.select_related("content_type"))
         )
         if not self.request.user.is_superuser:
-            qs = qs.exclude(code="superuser")
+            qs = qs.exclude(code__in=["superuser", "admin"])
         return qs.order_by("name")
 
     def destroy(self, request, *args, **kwargs):

@@ -177,7 +177,7 @@ class UserSerializer(serializers.ModelSerializer):
         if field is not None:
             rq = Role.objects.all()
             if not acting_super:
-                rq = rq.exclude(code="superuser")
+                rq = rq.exclude(code__in=["superuser", "admin"])
             field.queryset = rq
 
     def to_representation(self, instance):
@@ -198,7 +198,7 @@ class UserSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {
                         "is_superuser": [
-                            "Apenas um superutilizador pode criar ou promover a superutilizador."
+                            "Não tem permissão para atribuir este nível de acesso."
                         ]
                     }
                 )
@@ -206,16 +206,17 @@ class UserSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     {
                         "is_staff": [
-                            "Apenas um superutilizador pode atribuir estado de staff."
+                            "Não tem permissão para atribuir este nível de acesso."
                         ]
                     }
                 )
             attrs.pop("is_superuser", None)
             attrs.pop("is_staff", None)
         role = attrs.get("role")
-        if role is not None and getattr(role, "code", None) == "superuser" and not acting_super:
+        role_code = getattr(role, "code", None) if role is not None else None
+        if role_code in {"superuser", "admin"} and not acting_super:
             raise serializers.ValidationError(
-                {"role_id": ["Apenas um superutilizador pode atribuir o papel Superutilizador."]}
+                {"role_id": ["Não tem permissão para atribuir este papel."]}
             )
         return attrs
 

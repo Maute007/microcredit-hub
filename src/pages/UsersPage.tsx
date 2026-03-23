@@ -682,7 +682,7 @@ function UserForm({
       {allowSuperuserFields && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
           <p className="text-xs font-medium text-amber-900 dark:text-amber-200">
-            Acesso de sistema (apenas superutilizador)
+            Acesso avançado de sistema
           </p>
           <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -1255,13 +1255,13 @@ function SystemSettingsForm({
                   }
                 />
                 <Label htmlFor="lock-system" className="cursor-pointer text-sm">
-                  Bloquear acesso para todos excepto superuser
+                  Bloquear acesso para todos os utilizadores
                 </Label>
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Apenas o superuser pode alterar este bloqueio. Útil para manutenção, migrações ou quando o cliente não
-              está autorizado a usar o sistema.
+              Esta opção é reservada para o nível mais alto de administração. Útil para manutenção, migrações ou quando
+              o cliente não está autorizado a usar o sistema.
             </p>
           </div>
         )}
