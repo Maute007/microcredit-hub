@@ -935,8 +935,11 @@ function SystemSettingsForm({
   const [loginBannerMaxWidth, setLoginBannerMaxWidth] = useState(initial?.login_banner_max_width ?? "100%");
   const [loginBannerPadding, setLoginBannerPadding] = useState(initial?.login_banner_padding ?? "0");
   const [loginTitleFontSize, setLoginTitleFontSize] = useState(initial?.login_title_font_size ?? "");
+  const [loginTitleColor, setLoginTitleColor] = useState(initial?.login_title_color ?? "");
   const [loginSubtitleFontSize, setLoginSubtitleFontSize] = useState(initial?.login_subtitle_font_size ?? "");
+  const [loginSubtitleColor, setLoginSubtitleColor] = useState(initial?.login_subtitle_color ?? "");
   const [loginBodyFontSize, setLoginBodyFontSize] = useState(initial?.login_body_font_size ?? "");
+  const [loginBodyColor, setLoginBodyColor] = useState(initial?.login_body_color ?? "");
   const [loginShowFeatureBoxes, setLoginShowFeatureBoxes] = useState(initial?.login_show_feature_boxes !== false);
 
   useEffect(() => {
@@ -957,8 +960,11 @@ function SystemSettingsForm({
     setLoginBannerMaxWidth(initial.login_banner_max_width ?? "100%");
     setLoginBannerPadding(initial.login_banner_padding ?? "0");
     setLoginTitleFontSize(initial.login_title_font_size ?? "");
+    setLoginTitleColor(initial.login_title_color ?? "");
     setLoginSubtitleFontSize(initial.login_subtitle_font_size ?? "");
+    setLoginSubtitleColor(initial.login_subtitle_color ?? "");
     setLoginBodyFontSize(initial.login_body_font_size ?? "");
+    setLoginBodyColor(initial.login_body_color ?? "");
     setLoginShowFeatureBoxes(initial.login_show_feature_boxes !== false);
   }, [initial?.id, initial?.updated_at]);
 
@@ -985,8 +991,11 @@ function SystemSettingsForm({
           login_banner_max_width: loginBannerMaxWidth.trim() || "100%",
           login_banner_padding: loginBannerPadding.trim() || "0",
           login_title_font_size: loginTitleFontSize.trim() || undefined,
+          login_title_color: loginTitleColor.trim() || undefined,
           login_subtitle_font_size: loginSubtitleFontSize.trim() || undefined,
+          login_subtitle_color: loginSubtitleColor.trim() || undefined,
           login_body_font_size: loginBodyFontSize.trim() || undefined,
+          login_body_color: loginBodyColor.trim() || undefined,
           login_show_feature_boxes: loginShowFeatureBoxes,
         });
       }}
@@ -1156,6 +1165,14 @@ function SystemSettingsForm({
               />
             </div>
             <div>
+              <Label>Cor título</Label>
+              <Input
+                value={loginTitleColor}
+                onChange={(e) => setLoginTitleColor(e.target.value)}
+                placeholder="#ffffff"
+              />
+            </div>
+            <div>
               <Label>Tamanho fonte subtítulo</Label>
               <Input
                 value={loginSubtitleFontSize}
@@ -1164,11 +1181,27 @@ function SystemSettingsForm({
               />
             </div>
             <div>
+              <Label>Cor subtítulo</Label>
+              <Input
+                value={loginSubtitleColor}
+                onChange={(e) => setLoginSubtitleColor(e.target.value)}
+                placeholder="#f3f4f6"
+              />
+            </div>
+            <div>
               <Label>Tamanho fonte corpo</Label>
               <Input
                 value={loginBodyFontSize}
                 onChange={(e) => setLoginBodyFontSize(e.target.value)}
                 placeholder="Ex.: 0.875rem"
+              />
+            </div>
+            <div>
+              <Label>Cor corpo</Label>
+              <Input
+                value={loginBodyColor}
+                onChange={(e) => setLoginBodyColor(e.target.value)}
+                placeholder="#e5e7eb"
               />
             </div>
           </div>
@@ -1254,7 +1287,10 @@ function SystemSettingsForm({
         >
           <p
             className="font-semibold text-sm"
-            style={loginTitleFontSize.trim() ? { fontSize: loginTitleFontSize.trim() } : undefined}
+            style={{
+              ...(loginTitleFontSize.trim() ? { fontSize: loginTitleFontSize.trim() } : {}),
+              ...(loginTitleColor.trim() ? { color: loginTitleColor.trim() } : {}),
+            }}
           >
             {loginBannerTitleText(
               {
@@ -1269,14 +1305,20 @@ function SystemSettingsForm({
           } as ApiSystemSettings) ? (
             <p
               className="opacity-95 mt-1 text-xs"
-              style={loginSubtitleFontSize.trim() ? { fontSize: loginSubtitleFontSize.trim() } : undefined}
+              style={{
+                ...(loginSubtitleFontSize.trim() ? { fontSize: loginSubtitleFontSize.trim() } : {}),
+                ...(loginSubtitleColor.trim() ? { color: loginSubtitleColor.trim() } : {}),
+              }}
             >
               {loginBannerSubtitleText({ login_banner_subtitle: loginBannerSubtitle || undefined } as ApiSystemSettings)}
             </p>
           ) : null}
           <p
             className="text-xs opacity-90 mt-1 line-clamp-4 whitespace-pre-wrap"
-            style={loginBodyFontSize.trim() ? { fontSize: loginBodyFontSize.trim() } : undefined}
+            style={{
+              ...(loginBodyFontSize.trim() ? { fontSize: loginBodyFontSize.trim() } : {}),
+              ...(loginBodyColor.trim() ? { color: loginBodyColor.trim() } : {}),
+            }}
           >
             {loginBannerBodyText(
               {

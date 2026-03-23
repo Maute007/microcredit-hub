@@ -174,15 +174,33 @@ class SystemSettings(models.Model):
       verbose_name=_("Tamanho do título"),
       help_text=_("Ex.: 1.75rem ou 28px. Vazio = tamanho responsivo padrão."),
   )
+  login_title_color = models.CharField(
+      max_length=32,
+      blank=True,
+      verbose_name=_("Cor do título"),
+      help_text=_("Ex.: #ffffff, rgb(...), var(--token). Vazio = cor padrão."),
+  )
   login_subtitle_font_size = models.CharField(
       max_length=16,
       blank=True,
       verbose_name=_("Tamanho do subtítulo"),
   )
+  login_subtitle_color = models.CharField(
+      max_length=32,
+      blank=True,
+      verbose_name=_("Cor do subtítulo"),
+      help_text=_("Vazio = cor padrão."),
+  )
   login_body_font_size = models.CharField(
       max_length=16,
       blank=True,
       verbose_name=_("Tamanho do corpo"),
+  )
+  login_body_color = models.CharField(
+      max_length=32,
+      blank=True,
+      verbose_name=_("Cor do corpo"),
+      help_text=_("Vazio = cor padrão."),
   )
   login_show_feature_boxes = models.BooleanField(
       default=True,

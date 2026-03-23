@@ -255,8 +255,11 @@ export interface ApiSystemSettings {
   login_banner_max_width?: string;
   login_banner_padding?: string;
   login_title_font_size?: string;
+  login_title_color?: string;
   login_subtitle_font_size?: string;
+  login_subtitle_color?: string;
   login_body_font_size?: string;
+  login_body_color?: string;
   login_show_feature_boxes?: boolean;
   updated_at: string;
   is_locked: boolean;
@@ -291,8 +294,11 @@ export const systemApi = {
         | "login_banner_max_width"
         | "login_banner_padding"
         | "login_title_font_size"
+        | "login_title_color"
         | "login_subtitle_font_size"
+        | "login_subtitle_color"
         | "login_body_font_size"
+        | "login_body_color"
         | "login_show_feature_boxes"
       >
     >,

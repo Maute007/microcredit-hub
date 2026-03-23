@@ -44,17 +44,23 @@ export function loginBannerTextBlockStyle(s: ApiSystemSettings | null | undefine
 
 export function loginBannerTitleStyle(s: ApiSystemSettings | null | undefined): CSSProperties {
   const fs = s?.login_title_font_size?.trim();
-  return fs ? { fontSize: fs } : {};
+  const color = s?.login_title_color?.trim();
+  if (fs || color) return { ...(fs ? { fontSize: fs } : {}), ...(color ? { color } : {}) };
+  return {};
 }
 
 export function loginBannerSubtitleStyle(s: ApiSystemSettings | null | undefined): CSSProperties {
   const fs = s?.login_subtitle_font_size?.trim();
-  return fs ? { fontSize: fs } : {};
+  const color = s?.login_subtitle_color?.trim();
+  if (fs || color) return { ...(fs ? { fontSize: fs } : {}), ...(color ? { color } : {}) };
+  return {};
 }
 
 export function loginBannerBodyStyle(s: ApiSystemSettings | null | undefined): CSSProperties {
   const fs = s?.login_body_font_size?.trim();
-  return fs ? { fontSize: fs } : {};
+  const color = s?.login_body_color?.trim();
+  if (fs || color) return { ...(fs ? { fontSize: fs } : {}), ...(color ? { color } : {}) };
+  return {};
 }
 
 export function loginBannerTitleText(s: ApiSystemSettings | null | undefined, taglineFallback: string): string {

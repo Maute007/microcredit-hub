@@ -1,0 +1,22 @@
+{
+  "name": "Microcredit Hub",
+  "short_name": "Microcredit",
+  "description": "Plataforma interna de gestão de microcrédito, RH e contabilidade.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f766e",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

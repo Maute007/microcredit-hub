@@ -16,6 +16,13 @@
       "permissions_mode": "none"
     },
     {
+      "code": "admin",
+      "name": "Administrador interno",
+      "description": "Perfil interno com quase todas as permissões operacionais do sistema (sem ser superutilizador).",
+      "is_system": true,
+      "permissions_mode": "all"
+    },
+    {
       "code": "gerente",
       "name": "Gerente",
       "description": "Acesso total às operações do sistema (equivalente a permissões completas).",
@@ -70,6 +77,13 @@
     }
   ],
   "demo_users": [
+    {
+      "username": "admin.demo",
+      "email": "admin@demo.local",
+      "first_name": "Administrador",
+      "role_code": "admin",
+      "is_staff": true
+    },
     {
       "username": "gerente.demo",
       "email": "gerente@demo.local",

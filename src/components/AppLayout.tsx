@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
@@ -18,10 +18,15 @@ import {
   LogOut,
   Building2,
   History,
+  Download,
 } from "lucide-react";
 import { NotificationDropdown } from "@/components/NotificationDropdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+}
 
 const UTILIZADORES_ACCESS_PERMS = [
   "view_user",
@@ -55,13 +60,14 @@ const navItems: Array<{
   { title: "Contabilidade", path: "/contabilidade", icon: BookOpen, viewPermission: "view_transaction" },
   { title: "Relatórios", path: "/relatorios", icon: FileBarChart },
   { title: "Utilizadores & Acesso", path: "/utilizadores", icon: Building2, anyOfPermissions: UTILIZADORES_ACCESS_PERMS },
-  { title: "Histórico de acções", path: "/auditoria", icon: History, adminOnly: true },
+  { title: "Histórico de acções", path: "/auditoria", icon: History, viewPermission: "view_user" },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -87,6 +93,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const brandSubtitle =
     systemSettings?.tagline || (brandName === vendorName ? "Sistema de Gestão" : `${vendorName} · Sistema de Gestão`);
   const brandColor = systemSettings?.primary_color || undefined;
+
+  useEffect(() => {
+    const onBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+  }, []);
 
   const isActive = (path: string) =>
     path === "/dashboard"
@@ -261,6 +276,21 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2">
+            {installPrompt && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:inline-flex"
+                onClick={async () => {
+                  if (!installPrompt?.prompt) return;
+                  await installPrompt.prompt();
+                  setInstallPrompt(null);
+                }}
+              >
+                <Download className="h-4 w-4 mr-1.5" />
+                Instalar app
+              </Button>
+            )}
             <NotificationDropdown />
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center lg:hidden">
               <span className="text-xs font-medium text-primary">{initials}</span>
