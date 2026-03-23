@@ -175,6 +175,11 @@ class UserSerializer(serializers.ModelSerializer):
         if not acting_super:
             attrs.pop("is_superuser", None)
             attrs.pop("is_staff", None)
+        role = attrs.get("role")
+        if role is not None and getattr(role, "code", None) == "superuser" and not acting_super:
+            raise serializers.ValidationError(
+                {"role_id": ["Apenas um superutilizador pode atribuir o papel Superutilizador."]}
+            )
         return attrs
 
     def create(self, validated_data):

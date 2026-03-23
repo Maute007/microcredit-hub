@@ -3,10 +3,12 @@ from django.db.models import Prefetch, Q
 from django.http import Http404
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Profile, Role, SystemSettings, User
+from .permissions import CanListPermissionsForRoles, CanPatchSystemSettings
 from .serializers import (
     PermissionSerializer,
     ProfileSerializer,
@@ -44,7 +46,7 @@ class UserViewSet(viewsets.ModelViewSet):
     """CRUD de usuários. Queryset otimizado para evitar N+1."""
 
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.DjangoModelPermissions]
 
     def get_queryset(self):
         qs = _user_queryset()
@@ -75,12 +77,19 @@ class UserViewSet(viewsets.ModelViewSet):
             raise Http404()
         return obj
 
+    def perform_destroy(self, instance):
+        if instance.is_superuser and not self.request.user.is_superuser:
+            raise PermissionDenied(
+                detail="Apenas um superutilizador pode eliminar outro superutilizador.",
+            )
+        super().perform_destroy(instance)
+
 
 class ProfileViewSet(viewsets.ModelViewSet):
     """CRUD de perfis (ligados a User)."""
 
     serializer_class = ProfileSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.DjangoModelPermissions]
 
     def get_queryset(self):
         qs = Profile.objects.select_related("user").order_by("id")
@@ -93,7 +102,7 @@ class RoleViewSet(viewsets.ModelViewSet):
     """CRUD de papéis com permissões dinâmicas. Evita N+1."""
 
     serializer_class = RoleSerializer
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [permissions.DjangoModelPermissions]
     search_fields = ["code", "name"]
     filterset_fields = ["is_system"]
     ordering_fields = ["id", "code", "name"]
@@ -133,7 +142,7 @@ _ACTION_LABELS = {"view": "Ver", "add": "Criar", "change": "Editar", "delete": "
 class PermissionListView(APIView):
     """Lista todas as permissões disponíveis (para atribuir a papéis dinamicamente)."""
 
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [CanListPermissionsForRoles]
 
     def get(self, request):
         group = request.query_params.get("format") == "by_module"
@@ -185,12 +194,12 @@ class PermissionListView(APIView):
 class SystemSettingsView(APIView):
     """Leitura/actualização das configurações globais do sistema (nome, logo, cores).
     GET é público — necessário na página de login para mostrar logo e cores.
-    PATCH/PUT exige staff."""
+    PATCH exige permissão accounts.change_systemsettings (ou superuser)."""
 
     def get_permissions(self):
         if self.request.method == "GET":
             return [permissions.AllowAny()]
-        return [permissions.IsAdminUser()]
+        return [CanPatchSystemSettings()]
 
     def get(self, request):
         settings_obj = SystemSettings.get_solo()

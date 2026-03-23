@@ -65,7 +65,7 @@ export default function AccountingPage() {
   const [editingTx, setEditingTx] = useState<ApiTransaction | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { canEditTransaction, canDeleteTransaction } = usePermissions();
+  const { canEditTransaction, canDeleteTransaction, canAddTax, canDeleteTax, canChangeTax } = usePermissions();
   const { user } = useAuth();
   const canManageClosings = !!user && (user.is_staff || user.is_superuser);
 
@@ -498,6 +498,7 @@ export default function AccountingPage() {
               </DialogContent>
             </Dialog>
 
+            {canAddTax && (
             <Dialog open={showTaxDialog} onOpenChange={setShowTaxDialog}>
               <DialogTrigger asChild>
                 <Button variant="outline">
@@ -515,6 +516,7 @@ export default function AccountingPage() {
                 />
               </DialogContent>
             </Dialog>
+            )}
           </div>
         }
       />
@@ -1030,10 +1032,12 @@ export default function AccountingPage() {
                   Crie/edite impostos e use em transações (e futuramente em outros módulos).
                 </p>
               </div>
+              {canAddTax && (
               <Button variant="outline" onClick={() => setShowTaxDialog(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Novo imposto
               </Button>
+              )}
             </div>
             <div className="p-6 overflow-x-auto">
               <table className="w-full text-sm">
@@ -1064,6 +1068,7 @@ export default function AccountingPage() {
                             type="button"
                             variant={t.is_active ? "default" : "outline"}
                             size="sm"
+                            disabled={!canChangeTax}
                             onClick={() => updateTaxMut.mutate({ id: t.id, payload: { is_active: !t.is_active } })}
                           >
                             {t.is_active ? "Sim" : "Não"}
@@ -1071,17 +1076,21 @@ export default function AccountingPage() {
                         </td>
                         <td className="px-3 py-2 text-right">
                           <div className="inline-flex gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => setEditingTax(t)}>
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive"
-                              onClick={() => deleteTaxMut.mutate(t.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            {canChangeTax && (
+                              <Button variant="ghost" size="sm" onClick={() => setEditingTax(t)}>
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {canDeleteTax && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive"
+                                onClick={() => deleteTaxMut.mutate(t.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </tr>

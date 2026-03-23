@@ -23,6 +23,19 @@ import { NotificationDropdown } from "@/components/NotificationDropdown";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+const UTILIZADORES_ACCESS_PERMS = [
+  "view_user",
+  "add_user",
+  "change_user",
+  "delete_user",
+  "view_role",
+  "add_role",
+  "change_role",
+  "delete_role",
+  "view_systemsettings",
+  "change_systemsettings",
+] as const;
+
 const navItems: Array<{
   title: string;
   path: string;
@@ -30,6 +43,8 @@ const navItems: Array<{
   adminOnly?: boolean;
   /** Permissão necessária para ver o módulo (ex: view_client). Se não definida, qualquer autenticado vê. */
   viewPermission?: string;
+  /** Se definido, basta uma destas permissões (em vez de adminOnly ou viewPermission). */
+  anyOfPermissions?: readonly string[];
 }> = [
   { title: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { title: "Clientes", path: "/clientes", icon: Users, viewPermission: "view_client" },
@@ -39,7 +54,7 @@ const navItems: Array<{
   { title: "Recursos Humanos", path: "/rh", icon: UserCog, viewPermission: "view_employee" },
   { title: "Contabilidade", path: "/contabilidade", icon: BookOpen, viewPermission: "view_transaction" },
   { title: "Relatórios", path: "/relatorios", icon: FileBarChart },
-  { title: "Utilizadores & Acesso", path: "/utilizadores", icon: Building2, adminOnly: true },
+  { title: "Utilizadores & Acesso", path: "/utilizadores", icon: Building2, anyOfPermissions: UTILIZADORES_ACCESS_PERMS },
   { title: "Histórico de acções", path: "/auditoria", icon: History, adminOnly: true },
 ];
 
@@ -80,7 +95,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const perms = user?.permissions ?? [];
   const hasViewPermission = (codename: string) =>
-    !user ? false : user.is_superuser || perms.includes("*") || perms.includes(codename);
+    !user
+      ? false
+      : user.is_superuser ||
+        perms.includes("*") ||
+        perms.includes(codename) ||
+        perms.some((p) => p.endsWith(`.${codename}`));
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -115,6 +135,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         {navItems
           .filter((item) => {
             if (item.adminOnly) return user?.is_staff || user?.is_superuser;
+            if (item.anyOfPermissions?.length)
+              return item.anyOfPermissions.some((c) => hasViewPermission(c));
             if (item.viewPermission) return hasViewPermission(item.viewPermission);
             return true;
           })

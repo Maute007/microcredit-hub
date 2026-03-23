@@ -1888,6 +1888,7 @@ function PayrollAdjustmentsPanel({
   adjustments: AdjustmentItem[];
   onSaved: () => void;
 }) {
+  const { canAddPayrollAdjustment, canChangePayrollAdjustment, canDeletePayrollAdjustment } = usePermissions();
   const { toast } = useToast();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<AdjustmentItem | null>(null);
@@ -2021,10 +2022,12 @@ function PayrollAdjustmentsPanel({
             </p>
           </div>
           <div className="flex items-center gap-2">
+            {canAddPayrollAdjustment && (
             <Button size="sm" onClick={openAdd}>
               <Plus className="h-4 w-4 mr-2" />
               Adicionar lançamento
             </Button>
+            )}
             <span className="text-xs text-muted-foreground">{adjustments.length} registados</span>
           </div>
         </div>
@@ -2059,6 +2062,7 @@ function PayrollAdjustmentsPanel({
                     <td className="px-4 py-2 text-muted-foreground">{a.notes || "—"}</td>
                     <td className="px-4 py-2 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        {canChangePayrollAdjustment && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -2068,6 +2072,7 @@ function PayrollAdjustmentsPanel({
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon"
@@ -2077,6 +2082,7 @@ function PayrollAdjustmentsPanel({
                         >
                           <History className="h-4 w-4" />
                         </Button>
+                        {canDeletePayrollAdjustment && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -2086,6 +2092,7 @@ function PayrollAdjustmentsPanel({
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

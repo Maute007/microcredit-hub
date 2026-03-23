@@ -22,6 +22,7 @@ import {
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -92,25 +93,46 @@ export default function UsersPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user: authUser } = useAuth();
+  const {
+    canViewUser,
+    canAddUser,
+    canChangeUser,
+    canDeleteUser,
+    canViewRole,
+    canAddRole,
+    canChangeRole,
+    canDeleteRole,
+    canViewSystemSettings,
+    canChangeSystemSettings,
+  } = usePermissions();
+
+  const showUsersTab = canViewUser || canAddUser;
+  const showRolesTab = canViewRole || canAddRole || canChangeRole || canDeleteRole;
+  const showSettingsTab = canViewSystemSettings || canChangeSystemSettings;
+  const defaultTab = showUsersTab ? "users" : showRolesTab ? "roles" : "settings";
 
   const { data: users = [], isError: usersError, refetch: refetchUsers } = useQuery<ApiUser[]>({
     queryKey: ["users"],
     queryFn: usersApi.list,
+    enabled: canViewUser,
   });
 
   const { data: roles = [] } = useQuery<ApiRole[]>({
     queryKey: ["roles"],
     queryFn: rolesApi.list,
+    enabled: showRolesTab,
   });
 
   const { data: permissions = [] } = useQuery<ApiPermission[]>({
     queryKey: ["permissions"],
     queryFn: permissionsApi.list,
+    enabled: showRolesTab,
   });
 
   const { data: employees = [] } = useQuery<ApiEmployee[]>({
     queryKey: ["employees-all"],
     queryFn: () => hrApi.employees.list({ page_size: 200 }),
+    enabled: canAddUser || canChangeUser,
   });
 
   const { data: systemSettings } = useQuery<ApiSystemSettings>({
@@ -206,6 +228,7 @@ export default function UsersPage() {
         title="Utilizadores & Acesso"
         description="Gestão de utilizadores, papéis, permissões e identidade visual do sistema."
         actions={
+          canAddUser ? (
           <Dialog open={showNewUser} onOpenChange={setShowNewUser}>
             <DialogTrigger asChild>
               <Button>
@@ -218,7 +241,7 @@ export default function UsersPage() {
                 <DialogTitle>Novo utilizador</DialogTitle>
               </DialogHeader>
               <UserForm
-                roles={roles}
+                roles={rolesVisible}
                 employees={employees}
                 loading={createUser.isLoading}
                 allowSuperuserFields={!!authUser?.is_superuser}
@@ -226,31 +249,39 @@ export default function UsersPage() {
               />
             </DialogContent>
           </Dialog>
+          ) : null
         }
       />
 
-      <Tabs defaultValue="users" className="mt-4 space-y-4">
+      <Tabs defaultValue={defaultTab} className="mt-4 space-y-4">
         <TabsList className="bg-muted/50 p-1 rounded-xl flex-wrap gap-1">
-          <TabsTrigger value="users" className="rounded-lg">
-            <Users className="h-4 w-4 mr-1" />
-            Utilizadores
-          </TabsTrigger>
-          <TabsTrigger value="roles" className="rounded-lg">
-            <Shield className="h-4 w-4 mr-1" />
-            Papéis & Permissões
-          </TabsTrigger>
-          <TabsTrigger value="settings" className="rounded-lg">
-            <Settings2 className="h-4 w-4 mr-1" />
-            Configurações do sistema
-          </TabsTrigger>
+          {showUsersTab && (
+            <TabsTrigger value="users" className="rounded-lg">
+              <Users className="h-4 w-4 mr-1" />
+              Utilizadores
+            </TabsTrigger>
+          )}
+          {showRolesTab && (
+            <TabsTrigger value="roles" className="rounded-lg">
+              <Shield className="h-4 w-4 mr-1" />
+              Papéis & Permissões
+            </TabsTrigger>
+          )}
+          {showSettingsTab && (
+            <TabsTrigger value="settings" className="rounded-lg">
+              <Settings2 className="h-4 w-4 mr-1" />
+              Configurações do sistema
+            </TabsTrigger>
+          )}
         </TabsList>
 
+        {showUsersTab && (
         <TabsContent value="users" className="space-y-4">
           <DataTable
             data={visibleUsers}
             columns={userColumns}
             searchKeys={["username", "email", "employee_name"]}
-            onRowClick={setEditingUser}
+            onRowClick={canViewUser || canChangeUser ? setEditingUser : undefined}
           />
 
           <Dialog open={!!editingUser} onOpenChange={(o) => !o && setEditingUser(null)}>
@@ -261,10 +292,12 @@ export default function UsersPage() {
               {editingUser && (
                 <UserForm
                   initial={editingUser}
-                  roles={roles}
+                  roles={rolesVisible}
                   employees={employees}
                   loading={updateUser.isLoading}
                   allowSuperuserFields={!!authUser?.is_superuser}
+                  readOnly={!canChangeUser}
+                  canDelete={canDeleteUser}
                   onSubmit={(payload) =>
                     updateUser.mutate({
                       id: editingUser.id,
@@ -282,7 +315,9 @@ export default function UsersPage() {
             </DialogContent>
           </Dialog>
         </TabsContent>
+        )}
 
+        {showRolesTab && (
         <TabsContent value="roles" className="space-y-4">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
@@ -291,6 +326,7 @@ export default function UsersPage() {
                 Agrupe permissões por função (ex.: gestor, caixa, analista) e atribua esses papéis aos utilizadores.
               </p>
             </div>
+            {canAddRole && (
             <Dialog open={showNewRole} onOpenChange={setShowNewRole}>
               <DialogTrigger asChild>
                 <Button variant="outline">
@@ -309,6 +345,7 @@ export default function UsersPage() {
                 />
               </DialogContent>
             </Dialog>
+            )}
           </div>
 
           <div className="rounded-2xl border bg-card shadow-sm overflow-hidden">
@@ -350,14 +387,16 @@ export default function UsersPage() {
                         </td>
                         <td className="px-3 py-2 text-right">
                           <div className="inline-flex gap-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setEditingRole(r)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            {!r.is_system && (
+                            {canChangeRole && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setEditingRole(r)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {!r.is_system && canDeleteRole && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -393,15 +432,19 @@ export default function UsersPage() {
             </DialogContent>
           </Dialog>
         </TabsContent>
+        )}
 
+        {showSettingsTab && (
         <TabsContent value="settings">
           <SystemSettingsForm
             initial={systemSettings}
             loading={updateSettings.isLoading}
             canLock={!!authUser?.is_superuser}
+            canEdit={canChangeSystemSettings}
             onSubmit={(payload) => updateSettings.mutate(payload)}
           />
         </TabsContent>
+        )}
       </Tabs>
     </div>
   );
@@ -413,6 +456,8 @@ function UserForm({
   employees,
   loading,
   allowSuperuserFields,
+  readOnly = false,
+  canDelete = true,
   onSubmit,
   onDelete,
 }: {
@@ -421,6 +466,10 @@ function UserForm({
   employees: ApiEmployee[];
   loading: boolean;
   allowSuperuserFields?: boolean;
+  /** Só visualização (ex.: tem view_user mas não change_user). */
+  readOnly?: boolean;
+  /** Mostrar botão eliminar (requer delete_user no papel). */
+  canDelete?: boolean;
   onSubmit: (payload: Partial<ApiUser> & { password?: string }) => void;
   onDelete?: () => void;
 }) {
@@ -451,6 +500,7 @@ function UserForm({
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
+        if (readOnly) return;
         const base: Partial<ApiUser> & { password?: string } = {
           username: username.trim(),
           email: email.trim() || undefined,
@@ -469,11 +519,11 @@ function UserForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Label>Username</Label>
-          <Input value={username} onChange={(e) => setUsername(e.target.value)} required />
+          <Input value={username} onChange={(e) => setUsername(e.target.value)} required readOnly={readOnly} />
         </div>
         <div>
           <Label>Email</Label>
-          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+          <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} readOnly={readOnly} />
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -484,12 +534,14 @@ function UserForm({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder={initial ? "Deixe em branco para não alterar" : ""}
-            required={!initial}
+            required={!initial && !readOnly}
+            readOnly={readOnly}
+            disabled={readOnly}
           />
         </div>
         <div>
           <Label>Papel</Label>
-          <Select value={roleId} onValueChange={setRoleId}>
+          <Select value={roleId} onValueChange={setRoleId} disabled={readOnly}>
             <SelectTrigger>
               <SelectValue placeholder="Selecionar papel" />
             </SelectTrigger>
@@ -506,7 +558,7 @@ function UserForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <Label>Colaborador associado (opcional)</Label>
-          <Select value={employeeId} onValueChange={setEmployeeId}>
+          <Select value={employeeId} onValueChange={setEmployeeId} disabled={readOnly}>
             <SelectTrigger>
               <SelectValue placeholder="Sem colaborador" />
             </SelectTrigger>
@@ -527,6 +579,7 @@ function UserForm({
             checked={isActive}
             onChange={(ev) => setIsActive(ev.target.checked)}
             className="rounded"
+            disabled={readOnly}
           />
           <Label htmlFor="user-active" className="cursor-pointer flex items-center gap-1">
             {isActive ? (
@@ -548,7 +601,7 @@ function UserForm({
           </p>
           <div className="flex flex-wrap gap-4">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={isStaff} onChange={(ev) => setIsStaff(ev.target.checked)} className="rounded" />
+              <input type="checkbox" checked={isStaff} onChange={(ev) => setIsStaff(ev.target.checked)} className="rounded" disabled={readOnly} />
               Staff (admin API / Django admin)
             </label>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -557,6 +610,7 @@ function UserForm({
                 checked={isSuperuser}
                 onChange={(ev) => setIsSuperuser(ev.target.checked)}
                 className="rounded"
+                disabled={readOnly}
               />
               Superutilizador
             </label>
@@ -564,7 +618,7 @@ function UserForm({
         </div>
       )}
       <div className="pt-2 flex justify-between gap-2">
-        {initial && onDelete && (
+        {initial && onDelete && canDelete && !readOnly && (
           <Button
             type="button"
             variant="ghost"
@@ -576,9 +630,11 @@ function UserForm({
           </Button>
         )}
         <div className="flex-1" />
-        <Button type="submit" disabled={loading}>
-          {loading ? "A guardar..." : initial ? "Guardar alterações" : "Criar utilizador"}
-        </Button>
+        {!readOnly && (
+          <Button type="submit" disabled={loading}>
+            {loading ? "A guardar..." : initial ? "Guardar alterações" : "Criar utilizador"}
+          </Button>
+        )}
       </div>
     </form>
   );
@@ -766,11 +822,14 @@ function SystemSettingsForm({
   initial,
   loading,
   canLock,
+  canEdit,
   onSubmit,
 }: {
   initial?: ApiSystemSettings;
   loading: boolean;
   canLock: boolean;
+  /** Permissão change_systemsettings (ou superuser). */
+  canEdit: boolean;
   onSubmit: (payload: Partial<ApiSystemSettings>) => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "Microcredit Hub");
@@ -823,6 +882,7 @@ function SystemSettingsForm({
       className="grid grid-cols-1 lg:grid-cols-3 gap-4"
       onSubmit={(e) => {
         e.preventDefault();
+        if (!canEdit) return;
         onSubmit({
           name: name.trim(),
           logo_url: logoUrl.trim() || null,
@@ -846,10 +906,17 @@ function SystemSettingsForm({
         });
       }}
     >
-      <div className="lg:col-span-2 space-y-4 rounded-2xl border bg-card p-6 shadow-sm">
+      {!canEdit && (
+        <p className="lg:col-span-3 text-sm text-muted-foreground rounded-lg border bg-muted/30 px-3 py-2">
+          Só pode visualizar estas definições. Peça a permissão <strong>Alterar configuração do sistema</strong> ao administrador.
+        </p>
+      )}
+      <div
+        className={`lg:col-span-2 space-y-4 rounded-2xl border bg-card p-6 shadow-sm ${!canEdit ? "pointer-events-none opacity-65" : ""}`}
+      >
         <div>
           <Label>Nome do sistema</Label>
-          <Input value={name} onChange={(e) => setName(e.target.value)} />
+          <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
@@ -1080,11 +1147,13 @@ function SystemSettingsForm({
             </p>
           </div>
         )}
-        <div className="pt-2 flex justify-end">
-          <Button type="submit" disabled={loading}>
-            {loading ? "A guardar..." : "Guardar configurações"}
-          </Button>
-        </div>
+        {canEdit && (
+          <div className="pt-2 flex justify-end">
+            <Button type="submit" disabled={loading}>
+              {loading ? "A guardar..." : "Guardar configurações"}
+            </Button>
+          </div>
+        )}
       </div>
       <div className="space-y-4 rounded-2xl border bg-card p-6 shadow-sm">
         <h3 className="font-semibold text-lg mb-1">Pré-visualização</h3>

@@ -11,7 +11,9 @@ export function usePermissions() {
   const hasPermission = (codename: string): boolean => {
     if (!user) return false;
     if (user.is_superuser || perms.includes("*")) return true;
-    return perms.includes(codename);
+    if (perms.includes(codename)) return true;
+    // Compatível se a API enviar "app_label.codename"
+    return perms.some((p) => p === codename || p.endsWith(`.${codename}`));
   };
 
   // Clientes
@@ -62,6 +64,24 @@ export function usePermissions() {
   const canEditUser = hasPermission("change_user");
   const canDeleteUser = hasPermission("delete_user");
 
+  // Papéis (accounts.role)
+  const canViewRole = hasPermission("view_role");
+  const canAddRole = hasPermission("add_role");
+  const canChangeRole = hasPermission("change_role");
+  const canDeleteRole = hasPermission("delete_role");
+
+  // Configurações globais (singleton)
+  const canViewSystemSettings = hasPermission("view_systemsettings");
+  const canChangeSystemSettings = hasPermission("change_systemsettings");
+
+  // Impostos / folha
+  const canDeleteTax = hasPermission("delete_tax");
+  const canChangeTax = hasPermission("change_tax");
+  const canAddTax = hasPermission("add_tax");
+  const canDeletePayrollAdjustment = hasPermission("delete_payrolladjustment");
+  const canChangePayrollAdjustment = hasPermission("change_payrolladjustment");
+  const canAddPayrollAdjustment = hasPermission("add_payrolladjustment");
+
   return {
     hasPermission,
     // Clientes
@@ -103,5 +123,17 @@ export function usePermissions() {
     canAddUser,
     canEditUser,
     canDeleteUser,
+    canViewRole,
+    canAddRole,
+    canChangeRole,
+    canDeleteRole,
+    canViewSystemSettings,
+    canChangeSystemSettings,
+    canDeleteTax,
+    canChangeTax,
+    canAddTax,
+    canDeletePayrollAdjustment,
+    canChangePayrollAdjustment,
+    canAddPayrollAdjustment,
   };
 }
