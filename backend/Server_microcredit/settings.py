@@ -20,6 +20,15 @@ def _csv_env(name: str, default: str = "") -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
 
+def _cookie_samesite_env(name: str, default: str = "Lax") -> str:
+    value = os.getenv(name, default).strip().lower()
+    if value == "none":
+        return "None"
+    if value == "strict":
+        return "Strict"
+    return "Lax"
+
+
 # SECURITY ---------------------------------------------------------------------
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", get_random_secret_key())
@@ -265,7 +274,8 @@ AUTHENTICATION_BACKENDS = [
 JWT_ACCESS_COOKIE = "access_token"
 JWT_REFRESH_COOKIE = "refresh_token"
 JWT_COOKIE_SECURE = not DEBUG  # Em produção, exige HTTPS
-JWT_COOKIE_SAMESITE = "Lax"
+# Em cross-origin (frontend e API em domínios diferentes), usar None + Secure.
+JWT_COOKIE_SAMESITE = _cookie_samesite_env("JWT_COOKIE_SAMESITE", "Lax")
 
 
 # CORS & CSRF (comunicação segura com frontend) -------------------------------
