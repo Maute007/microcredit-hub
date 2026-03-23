@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { QueryErrorAlert } from "@/components/QueryErrorAlert";
@@ -42,6 +42,11 @@ import {
   getPermissionHelpText,
   getFriendlyResourceName,
 } from "@/data/permissionsLabels";
+import {
+  loginBannerBodyText,
+  loginBannerSubtitleText,
+  loginBannerTitleText,
+} from "@/lib/loginBannerStyles";
 import { Shield, UserPlus, Users, Settings2, Trash2, Pencil, CheckCircle2, XCircle, HelpCircle } from "lucide-react";
 
 const userColumns = [
@@ -216,6 +221,7 @@ export default function UsersPage() {
                 roles={roles}
                 employees={employees}
                 loading={createUser.isLoading}
+                allowSuperuserFields={!!authUser?.is_superuser}
                 onSubmit={(payload) => createUser.mutate(payload)}
               />
             </DialogContent>
@@ -258,6 +264,7 @@ export default function UsersPage() {
                   roles={roles}
                   employees={employees}
                   loading={updateUser.isLoading}
+                  allowSuperuserFields={!!authUser?.is_superuser}
                   onSubmit={(payload) =>
                     updateUser.mutate({
                       id: editingUser.id,
@@ -405,6 +412,7 @@ function UserForm({
   roles,
   employees,
   loading,
+  allowSuperuserFields,
   onSubmit,
   onDelete,
 }: {
@@ -412,6 +420,7 @@ function UserForm({
   roles: ApiRole[];
   employees: ApiEmployee[];
   loading: boolean;
+  allowSuperuserFields?: boolean;
   onSubmit: (payload: Partial<ApiUser> & { password?: string }) => void;
   onDelete?: () => void;
 }) {
@@ -423,20 +432,38 @@ function UserForm({
     initial?.employee_id ? String(initial.employee_id) : "none",
   );
   const [isActive, setIsActive] = useState<boolean>(initial?.is_active ?? true);
+  const [isStaff, setIsStaff] = useState<boolean>(initial?.is_staff ?? false);
+  const [isSuperuser, setIsSuperuser] = useState<boolean>(initial?.is_superuser ?? false);
+
+  useEffect(() => {
+    setUsername(initial?.username ?? "");
+    setEmail(initial?.email ?? "");
+    setPassword("");
+    setRoleId(initial?.role?.id ? String(initial.role.id) : "");
+    setEmployeeId(initial?.employee_id ? String(initial.employee_id) : "none");
+    setIsActive(initial?.is_active ?? true);
+    setIsStaff(initial?.is_staff ?? false);
+    setIsSuperuser(initial?.is_superuser ?? false);
+  }, [initial?.id]);
 
   return (
     <form
       className="space-y-4"
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit({
+        const base: Partial<ApiUser> & { password?: string } = {
           username: username.trim(),
           email: email.trim() || undefined,
           password: password || undefined,
           is_active: isActive,
           role_id: roleId ? Number(roleId) : null,
           employee_id: employeeId === "none" ? null : Number(employeeId),
-        });
+        };
+        if (allowSuperuserFields) {
+          base.is_staff = isStaff;
+          base.is_superuser = isSuperuser;
+        }
+        onSubmit(base);
       }}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -514,6 +541,28 @@ function UserForm({
           </Label>
         </div>
       </div>
+      {allowSuperuserFields && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2">
+          <p className="text-xs font-medium text-amber-900 dark:text-amber-200">
+            Acesso de sistema (apenas superutilizador)
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input type="checkbox" checked={isStaff} onChange={(ev) => setIsStaff(ev.target.checked)} className="rounded" />
+              Staff (admin API / Django admin)
+            </label>
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isSuperuser}
+                onChange={(ev) => setIsSuperuser(ev.target.checked)}
+                className="rounded"
+              />
+              Superutilizador
+            </label>
+          </div>
+        </div>
+      )}
       <div className="pt-2 flex justify-between gap-2">
         {initial && onDelete && (
           <Button
@@ -731,6 +780,43 @@ function SystemSettingsForm({
   const [loginDescription, setLoginDescription] = useState(initial?.login_description ?? "");
   const [loginBannerColor, setLoginBannerColor] = useState(initial?.login_banner_color ?? "");
   const [loginCardColor, setLoginCardColor] = useState(initial?.login_card_color ?? "");
+  const [loginBannerTitle, setLoginBannerTitle] = useState(initial?.login_banner_title ?? "");
+  const [loginBannerSubtitle, setLoginBannerSubtitle] = useState(initial?.login_banner_subtitle ?? "");
+  const [loginBannerBody, setLoginBannerBody] = useState(initial?.login_banner_body ?? "");
+  const [loginBannerTextAlign, setLoginBannerTextAlign] = useState(initial?.login_banner_text_align ?? "left");
+  const [loginBannerBlockAlign, setLoginBannerBlockAlign] = useState(initial?.login_banner_block_align ?? "start");
+  const [loginBannerVerticalAlign, setLoginBannerVerticalAlign] = useState(
+    initial?.login_banner_vertical_align ?? "between",
+  );
+  const [loginBannerMaxWidth, setLoginBannerMaxWidth] = useState(initial?.login_banner_max_width ?? "100%");
+  const [loginBannerPadding, setLoginBannerPadding] = useState(initial?.login_banner_padding ?? "0");
+  const [loginTitleFontSize, setLoginTitleFontSize] = useState(initial?.login_title_font_size ?? "");
+  const [loginSubtitleFontSize, setLoginSubtitleFontSize] = useState(initial?.login_subtitle_font_size ?? "");
+  const [loginBodyFontSize, setLoginBodyFontSize] = useState(initial?.login_body_font_size ?? "");
+  const [loginShowFeatureBoxes, setLoginShowFeatureBoxes] = useState(initial?.login_show_feature_boxes !== false);
+
+  useEffect(() => {
+    if (!initial) return;
+    setName(initial.name ?? "Microcredit Hub");
+    setLogoUrl(initial.logo_url ?? "");
+    setPrimaryColor(initial.primary_color ?? "#0f766e");
+    setTagline(initial.tagline ?? "");
+    setLoginDescription(initial.login_description ?? "");
+    setLoginBannerColor(initial.login_banner_color ?? "");
+    setLoginCardColor(initial.login_card_color ?? "");
+    setLoginBannerTitle(initial.login_banner_title ?? "");
+    setLoginBannerSubtitle(initial.login_banner_subtitle ?? "");
+    setLoginBannerBody(initial.login_banner_body ?? "");
+    setLoginBannerTextAlign(initial.login_banner_text_align ?? "left");
+    setLoginBannerBlockAlign(initial.login_banner_block_align ?? "start");
+    setLoginBannerVerticalAlign(initial.login_banner_vertical_align ?? "between");
+    setLoginBannerMaxWidth(initial.login_banner_max_width ?? "100%");
+    setLoginBannerPadding(initial.login_banner_padding ?? "0");
+    setLoginTitleFontSize(initial.login_title_font_size ?? "");
+    setLoginSubtitleFontSize(initial.login_subtitle_font_size ?? "");
+    setLoginBodyFontSize(initial.login_body_font_size ?? "");
+    setLoginShowFeatureBoxes(initial.login_show_feature_boxes !== false);
+  }, [initial?.id, initial?.updated_at]);
 
   return (
     <form
@@ -745,6 +831,18 @@ function SystemSettingsForm({
           login_description: loginDescription.trim() || undefined,
           login_banner_color: loginBannerColor.trim() || undefined,
           login_card_color: loginCardColor.trim() || undefined,
+          login_banner_title: loginBannerTitle.trim() || undefined,
+          login_banner_subtitle: loginBannerSubtitle.trim() || undefined,
+          login_banner_body: loginBannerBody.trim() || undefined,
+          login_banner_text_align: loginBannerTextAlign,
+          login_banner_block_align: loginBannerBlockAlign,
+          login_banner_vertical_align: loginBannerVerticalAlign,
+          login_banner_max_width: loginBannerMaxWidth.trim() || "100%",
+          login_banner_padding: loginBannerPadding.trim() || "0",
+          login_title_font_size: loginTitleFontSize.trim() || undefined,
+          login_subtitle_font_size: loginSubtitleFontSize.trim() || undefined,
+          login_body_font_size: loginBodyFontSize.trim() || undefined,
+          login_show_feature_boxes: loginShowFeatureBoxes,
         });
       }}
     >
@@ -820,6 +918,117 @@ function SystemSettingsForm({
               />
             </div>
           </div>
+          <p className="text-xs font-semibold text-muted-foreground pt-2">Texto do banner (título, subtítulo, corpo)</p>
+          <div>
+            <Label>Título do banner</Label>
+            <Input
+              value={loginBannerTitle}
+              onChange={(e) => setLoginBannerTitle(e.target.value)}
+              placeholder="Vazio = usa a frase de impacto (tagline) acima"
+            />
+          </div>
+          <div>
+            <Label>Subtítulo (opcional)</Label>
+            <Input value={loginBannerSubtitle} onChange={(e) => setLoginBannerSubtitle(e.target.value)} />
+          </div>
+          <div>
+            <Label>Corpo / texto principal</Label>
+            <Textarea
+              value={loginBannerBody}
+              onChange={(e) => setLoginBannerBody(e.target.value)}
+              placeholder="Vazio = usa «Descrição» acima. Pode usar várias linhas."
+              rows={3}
+              className="resize-none"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Alinhamento do texto</Label>
+              <Select value={loginBannerTextAlign} onValueChange={setLoginBannerTextAlign}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="left">Esquerda</SelectItem>
+                  <SelectItem value="center">Centro</SelectItem>
+                  <SelectItem value="right">Direita</SelectItem>
+                  <SelectItem value="justify">Justificado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Posição horizontal do bloco</Label>
+              <Select value={loginBannerBlockAlign} onValueChange={setLoginBannerBlockAlign}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="start">Início (esquerda)</SelectItem>
+                  <SelectItem value="center">Centro</SelectItem>
+                  <SelectItem value="end">Fim (direita)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Distribuição vertical do painel</Label>
+              <Select value={loginBannerVerticalAlign} onValueChange={setLoginBannerVerticalAlign}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="start">Topo</SelectItem>
+                  <SelectItem value="center">Centro</SelectItem>
+                  <SelectItem value="end">Fundo</SelectItem>
+                  <SelectItem value="between">Espaçado (texto + destaques)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Largura máx. do texto</Label>
+              <Input
+                value={loginBannerMaxWidth}
+                onChange={(e) => setLoginBannerMaxWidth(e.target.value)}
+                placeholder="100%, 36rem..."
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Padding do bloco de texto</Label>
+              <Input
+                value={loginBannerPadding}
+                onChange={(e) => setLoginBannerPadding(e.target.value)}
+                placeholder="0, 1rem, 1rem 2rem..."
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <Label>Tamanho fonte título</Label>
+              <Input
+                value={loginTitleFontSize}
+                onChange={(e) => setLoginTitleFontSize(e.target.value)}
+                placeholder="Ex.: 1.75rem"
+              />
+            </div>
+            <div>
+              <Label>Tamanho fonte subtítulo</Label>
+              <Input
+                value={loginSubtitleFontSize}
+                onChange={(e) => setLoginSubtitleFontSize(e.target.value)}
+                placeholder="Ex.: 1rem"
+              />
+            </div>
+            <div>
+              <Label>Tamanho fonte corpo</Label>
+              <Input
+                value={loginBodyFontSize}
+                onChange={(e) => setLoginBodyFontSize(e.target.value)}
+                placeholder="Ex.: 0.875rem"
+              />
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              className="rounded"
+              checked={loginShowFeatureBoxes}
+              onChange={(e) => setLoginShowFeatureBoxes(e.target.checked)}
+            />
+            Mostrar caixas de destaques no login (Clientes, Pagamentos, etc.)
+          </label>
         </div>
 
         <div>
@@ -884,11 +1093,44 @@ function SystemSettingsForm({
         </p>
         <div
           className="rounded-xl border overflow-hidden text-white p-4 min-h-[120px]"
-          style={{ background: `linear-gradient(135deg, ${loginBannerColor || primaryColor}, ${loginBannerColor || primaryColor}CC)` }}
+          style={{
+            background: `linear-gradient(135deg, ${loginBannerColor || primaryColor}, ${loginBannerColor || primaryColor}CC)`,
+            textAlign: (loginBannerTextAlign as "left" | "center" | "right" | "justify") || "left",
+          }}
         >
-          <p className="font-semibold text-sm">{tagline || "Gestão moderna de microcrédito."}</p>
-          <p className="text-xs opacity-90 mt-1 line-clamp-3">
-            {loginDescription || "Organize clientes, empréstimos, pagamentos..."}
+          <p
+            className="font-semibold text-sm"
+            style={loginTitleFontSize.trim() ? { fontSize: loginTitleFontSize.trim() } : undefined}
+          >
+            {loginBannerTitleText(
+              {
+                login_banner_title: loginBannerTitle || undefined,
+                tagline: tagline || undefined,
+              } as ApiSystemSettings,
+              tagline || "Gestão moderna de microcrédito.",
+            )}
+          </p>
+          {loginBannerSubtitleText({
+            login_banner_subtitle: loginBannerSubtitle || undefined,
+          } as ApiSystemSettings) ? (
+            <p
+              className="opacity-95 mt-1 text-xs"
+              style={loginSubtitleFontSize.trim() ? { fontSize: loginSubtitleFontSize.trim() } : undefined}
+            >
+              {loginBannerSubtitleText({ login_banner_subtitle: loginBannerSubtitle || undefined } as ApiSystemSettings)}
+            </p>
+          ) : null}
+          <p
+            className="text-xs opacity-90 mt-1 line-clamp-4 whitespace-pre-wrap"
+            style={loginBodyFontSize.trim() ? { fontSize: loginBodyFontSize.trim() } : undefined}
+          >
+            {loginBannerBodyText(
+              {
+                login_banner_body: loginBannerBody || undefined,
+                login_description: loginDescription || undefined,
+              } as ApiSystemSettings,
+              "Organize clientes, empréstimos, pagamentos...",
+            )}
           </p>
         </div>
         <div className="rounded-xl border bg-muted/50 p-4 flex flex-col items-center gap-3">

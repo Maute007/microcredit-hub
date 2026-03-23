@@ -54,6 +54,37 @@ const COLLATERAL_CONDITIONS: { value: string; label: string }[] = [
   { value: "não_aplicavel", label: "Não aplicável" },
 ];
 
+/** Modelo para o separador Termos (T&C) — personalize por categoria. */
+const CATEGORY_TERMS_HINT = `TERMOS E CONDIÇÕES — MODELO (personalize)
+
+1. Entrega do bem como garantia
+1.1 O cliente entrega um bem de valor como garantia do pagamento.
+1.2 O bem ficará sob custódia até liquidação do valor acordado.
+
+2. Prazo de pagamento
+2.1 O prazo total segue os limites em dias definidos nesta categoria no sistema.
+2.2 É permitido pagamento antecipado.
+
+3. Taxa de juros
+3.1 Aplicam-se a taxa e o plano constantes no presente contrato e na simulação.
+
+4. Resgate da garantia
+4.1 O bem será devolvido após pagamento total.
+4.2 Em incumprimento, aplicam-se a lei e estas condições.`;
+
+/** Alinha com o cálculo em `LoanSerializer.validate` (backend). */
+function computeLoanPreview(amount: number, ratePercent: number, termMonths: number) {
+  const t = Math.max(1, Math.floor(termMonths) || 1);
+  const a = Math.max(0, amount);
+  const principal = a / t;
+  const rate = ratePercent / 100;
+  const interestPerMonth = (a * rate) / t;
+  const monthly = Math.round((principal + interestPerMonth) * 100) / 100;
+  const total = Math.round(monthly * t * 100) / 100;
+  const interestTotal = Math.round((total - a) * 100) / 100;
+  return { monthly, total, interestTotal };
+}
+
 function formatCollateralForContract(c: ApiCollateral | null | undefined): string {
   if (!c) return "Nenhum item de garantia registado.";
   const lines = [
@@ -94,6 +125,11 @@ function buildContractText(loan: ApiLoan): string {
       .join("\n");
   })();
 
+  const tc = loan.category_terms_and_conditions?.trim();
+  const termsBlock = tc
+    ? `\n\n————————————————————————————————————————\nTERMOS E CONDIÇÕES DA CATEGORIA (${loan.category_name ?? "—"})\n————————————————————————————————————————\n\n${tc}\n`
+    : "";
+
   return `MicroCrédito S.A.
 CONTRATO DE CRÉDITO Nº ${loan.id}
 
@@ -108,6 +144,7 @@ Pelo presente contrato, a empresa MicroCrédito S.A., com sede em Maputo, Moçam
 • Data de Término: ${formatDate(loan.end_date)}
 
 ${garantiaText ? `\nCondições específicas da categoria:\n${garantiaText}\n` : ""}
+${termsBlock}
 
 Item de Garantia (deixado em custódia pelo DEVEDOR):
 ${formatCollateralForContract(loan.collateral)}
@@ -121,6 +158,27 @@ _________________________          _________________________
 CREDORA — MicroCrédito S.A.        DEVEDOR(A) — ${loan.client_name}`;
 }
 
+function contractDataSignature(loan: ApiLoan): string {
+  return JSON.stringify({
+    id: loan.id,
+    client_name: loan.client_name,
+    amount: loan.amount,
+    interest_rate: loan.interest_rate,
+    term: loan.term,
+    monthly_payment: loan.monthly_payment,
+    total_amount: loan.total_amount,
+    start_date: loan.start_date,
+    end_date: loan.end_date,
+    category_name: loan.category_name,
+    category_code: loan.category_code,
+    category_frequency_days: loan.category_frequency_days,
+    category_collateral_grace_days: loan.category_collateral_grace_days,
+    category_require_interest_paid_to_keep_collateral: loan.category_require_interest_paid_to_keep_collateral,
+    category_terms_and_conditions: loan.category_terms_and_conditions,
+    collateral: loan.collateral,
+  });
+}
+
 function ContractTab({
   loan,
   contractText,
@@ -130,9 +188,10 @@ function ContractTab({
   contractText: string;
   setContractText: (v: string) => void;
 }) {
+  const dataSig = contractDataSignature(loan);
   useEffect(() => {
     setContractText(buildContractText(loan));
-  }, [loan.id]);
+  }, [dataSig, loan, setContractText]);
 
   const handlePrint = () => {
     const printWindow = window.open("", "_blank");
@@ -206,10 +265,12 @@ function LoanCategoryForm({
     late_interest_rate?: number;
     max_late_interest_months?: number;
     is_active?: boolean;
+    terms_and_conditions?: string;
   }) => void;
   loading: boolean;
   submitLabel?: string;
 }) {
+  const { toast } = useToast();
   const [name, setName] = useState(initial?.name ?? "");
   const [code, setCode] = useState(
     initial?.code ?? `CAT-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
@@ -245,24 +306,25 @@ function LoanCategoryForm({
     initial?.require_interest_paid_to_keep_collateral ?? true,
   );
   const [active, setActive] = useState(initial?.is_active ?? true);
+  const [termsAndConditions, setTermsAndConditions] = useState(initial?.terms_and_conditions ?? "");
+
+  useEffect(() => {
+    if (!initial?.id) return;
+    setTermsAndConditions(initial.terms_and_conditions ?? "");
+  }, [initial?.id, initial?.terms_and_conditions]);
 
   const submitPayload = () => ({
     name: name.trim(),
     code: code.trim(),
     description: description.trim() || undefined,
+    terms_and_conditions: termsAndConditions.trim() || undefined,
     min_amount: parseFloat(minAmount) || 0,
     max_amount: maxAmount.trim() ? parseFloat(maxAmount) || null : null,
     frequency_days: Math.max(1, parseInt(frequencyDays, 10) || 30),
-    min_term_days: Math.max(1, parseInt(minTermDays, 10) || 30),
-    max_term_days: Math.max(
-      parseInt(minTermDays, 10) || 30,
-      parseInt(maxTermDays, 10) || 365,
-    ),
+    min_term_days: Math.max(1, parseInt(minTermDays, 10) || 1),
+    max_term_days: Math.max(1, parseInt(maxTermDays, 10) || 1),
     min_installments: Math.max(1, parseInt(minInstallments, 10) || 1),
-    max_installments: Math.max(
-      parseInt(minInstallments, 10) || 1,
-      parseInt(maxInstallments, 10) || 12,
-    ),
+    max_installments: Math.max(1, parseInt(maxInstallments, 10) || 1),
     default_interest_rate: Math.max(0, parseFloat(defaultInterest) || 0),
     default_term_months: Math.max(1, parseInt(defaultTermMonths, 10) || 12),
     late_interest_rate: parseFloat(lateInterestRate) || 0,
@@ -277,22 +339,56 @@ function LoanCategoryForm({
       className="space-y-5"
       onSubmit={(e) => {
         e.preventDefault();
+        const minD = Math.max(1, parseInt(minTermDays, 10) || 1);
+        const maxD = Math.max(1, parseInt(maxTermDays, 10) || 1);
+        if (minD > maxD) {
+          toast({
+            title: "Prazos em dias inválidos",
+            description: `A duração mínima (${minD} dias) não pode ser maior que a máxima (${maxD} dias). Ajuste os valores.`,
+            variant: "destructive",
+          });
+          return;
+        }
+        const minP = Math.max(1, parseInt(minInstallments, 10) || 1);
+        const maxP = Math.max(1, parseInt(maxInstallments, 10) || 1);
+        if (minP > maxP) {
+          toast({
+            title: "Parcelas inválidas",
+            description: `O mínimo de parcelas (${minP}) não pode ser maior que o máximo (${maxP}).`,
+            variant: "destructive",
+          });
+          return;
+        }
+        const minA = parseFloat(minAmount) || 0;
+        const maxA = maxAmount.trim() ? parseFloat(maxAmount) : null;
+        if (maxA != null && !Number.isNaN(maxA) && minA > maxA) {
+          toast({
+            title: "Montantes inválidos",
+            description: "O montante mínimo não pode ser superior ao montante máximo.",
+            variant: "destructive",
+          });
+          return;
+        }
         onSubmit(submitPayload());
       }}
     >
       <Tabs defaultValue="basico" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 bg-muted/50 p-1 rounded-lg h-auto">
-          <TabsTrigger value="basico" className="gap-1.5 py-2">
-            <Tag className="h-3.5 w-3.5" />
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 bg-muted/50 p-1 rounded-lg h-auto gap-1">
+          <TabsTrigger value="basico" className="gap-1.5 py-2 text-xs sm:text-sm">
+            <Tag className="h-3.5 w-3.5 shrink-0" />
             Básico
           </TabsTrigger>
-          <TabsTrigger value="prazo" className="gap-1.5 py-2">
-            <Calendar className="h-3.5 w-3.5" />
-            Prazo & Juros
+          <TabsTrigger value="prazo" className="gap-1.5 py-2 text-xs sm:text-sm">
+            <Calendar className="h-3.5 w-3.5 shrink-0" />
+            Prazos & valores
           </TabsTrigger>
-          <TabsTrigger value="garantia" className="gap-1.5 py-2">
-            <Shield className="h-3.5 w-3.5" />
+          <TabsTrigger value="garantia" className="gap-1.5 py-2 text-xs sm:text-sm">
+            <Shield className="h-3.5 w-3.5 shrink-0" />
             Garantia
+          </TabsTrigger>
+          <TabsTrigger value="termos" className="gap-1.5 py-2 text-xs sm:text-sm">
+            <ScrollText className="h-3.5 w-3.5 shrink-0" />
+            T&C
           </TabsTrigger>
         </TabsList>
         <TabsContent value="basico" className="mt-4 space-y-4">
@@ -371,9 +467,13 @@ function LoanCategoryForm({
         </TabsContent>
         <TabsContent value="prazo" className="mt-4 space-y-4">
           <div className="space-y-4">
+            <p className="text-sm text-muted-foreground rounded-lg border bg-muted/30 px-3 py-2">
+              Os prazos do contrato são definidos em <strong>dias</strong> (fácil de comparar). A{" "}
+              <strong>duração máxima</strong> deve ser sempre maior ou igual à <strong>duração mínima</strong>.
+            </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
-                <Label>Frequência (dias)</Label>
+                <Label>Intervalo entre pagamentos (dias)</Label>
                 <Input
                   type="number"
                   value={frequencyDays}
@@ -381,10 +481,10 @@ function LoanCategoryForm({
                   min={1}
                   className="mt-1"
                 />
-                <p className="text-xs text-muted-foreground mt-1">30=mensal, 15=quinzenal</p>
+                <p className="text-xs text-muted-foreground mt-1">Ex.: 30 = mensal, 15 = quinzenal</p>
               </div>
               <div>
-                <Label>Prazo min (dias)</Label>
+                <Label>Duração mínima do contrato (dias)</Label>
                 <Input
                   type="number"
                   value={minTermDays}
@@ -392,9 +492,10 @@ function LoanCategoryForm({
                   min={1}
                   className="mt-1"
                 />
+                <p className="text-xs text-muted-foreground mt-1">Menor prazo permitido</p>
               </div>
               <div>
-                <Label>Prazo máx (dias)</Label>
+                <Label>Duração máxima do contrato (dias)</Label>
                 <Input
                   type="number"
                   value={maxTermDays}
@@ -402,11 +503,12 @@ function LoanCategoryForm({
                   min={1}
                   className="mt-1"
                 />
+                <p className="text-xs text-muted-foreground mt-1">Deve ser ≥ duração mínima</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div>
-                <Label>Parcelas min</Label>
+                <Label>Mín. de parcelas</Label>
                 <Input
                   type="number"
                   value={minInstallments}
@@ -414,9 +516,10 @@ function LoanCategoryForm({
                   min={1}
                   className="mt-1"
                 />
+                <p className="text-xs text-muted-foreground mt-1">Prestações</p>
               </div>
               <div>
-                <Label>Parcelas máx</Label>
+                <Label>Máx. de parcelas</Label>
                 <Input
                   type="number"
                   value={maxInstallments}
@@ -424,6 +527,7 @@ function LoanCategoryForm({
                   min={1}
                   className="mt-1"
                 />
+                <p className="text-xs text-muted-foreground mt-1">Deve ser ≥ mínimo</p>
               </div>
               <div>
                 <Label>Juros padrão (%)</Label>
@@ -438,7 +542,7 @@ function LoanCategoryForm({
                 <p className="text-xs text-muted-foreground mt-1">Sugerido ao criar empréstimo</p>
               </div>
               <div>
-                <Label>Prazo padrão (meses)</Label>
+                <Label>Prazo sugerido ao criar empréstimo (meses)</Label>
                 <Input
                   type="number"
                   value={defaultTermMonths}
@@ -446,6 +550,7 @@ function LoanCategoryForm({
                   min={1}
                   className="mt-1"
                 />
+                <p className="text-xs text-muted-foreground mt-1">Sugestão inicial; o cliente pode ajustar</p>
               </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t">
@@ -511,6 +616,32 @@ function LoanCategoryForm({
                 <span className="text-sm font-medium">Categoria activa (disponível ao criar empréstimo)</span>
               </label>
             </div>
+          </div>
+        </TabsContent>
+        <TabsContent value="termos" className="mt-4 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Este texto entra no <strong>contrato</strong> quando um empréstimo usa esta categoria. Use linguagem clara
+            (garantia, prazos, juros, resgate do bem). Pode colar o modelo abaixo e editar.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setTermsAndConditions(CATEGORY_TERMS_HINT)}
+            >
+              Inserir modelo de T&C
+            </Button>
+          </div>
+          <div>
+            <Label>Termos e condições (T&C)</Label>
+            <Textarea
+              value={termsAndConditions}
+              onChange={(e) => setTermsAndConditions(e.target.value)}
+              placeholder="Cole ou escreva os termos da categoria..."
+              rows={16}
+              className="mt-1 font-mono text-sm"
+            />
           </div>
         </TabsContent>
       </Tabs>
@@ -632,8 +763,10 @@ export default function LoansPage() {
   const updateLoan = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Parameters<typeof loansApi.update>[1] }) =>
       loansApi.update(id, payload),
-    onSuccess: async () => {
+    onSuccess: async (updated) => {
       await queryClient.invalidateQueries({ queryKey: ["loans"] });
+      await queryClient.invalidateQueries({ queryKey: ["loan-amortization", updated.id] });
+      setSelectedLoan((prev) => (prev?.id === updated.id ? updated : prev));
       setEditingLoan(null);
       toast({ title: "Empréstimo actualizado", description: "As alterações foram guardadas." });
     },
@@ -735,30 +868,22 @@ export default function LoansPage() {
     deleteCategory.mutate(id);
   };
 
-  // Quando o utilizador escolhe uma categoria, sugerir automaticamente juros e prazo
+  // Taxa e prazo vêm da categoria (definidos em Configurações), sempre que a categoria muda
   useEffect(() => {
     if (!selectedCategoryId || selectedCategoryId === "none") return;
     const cat = categories.find((c) => String(c.id) === selectedCategoryId);
     if (!cat) return;
-
-    // Preencher apenas se ainda estiver vazio ou com zero, para não atropelar edição manual
-    if (!rate.trim() || parseFloat(rate) === 0) {
-      setRate(String(cat.default_interest_rate ?? 0));
-    }
-    if (!term.trim() || parseInt(term, 10) === 0) {
-      setTerm(String(cat.default_term_months ?? 12));
-    }
+    setRate(String(cat.default_interest_rate ?? 0));
+    setTerm(String(cat.default_term_months ?? 12));
   }, [selectedCategoryId, categories]);
 
-  const calcPayment = () => {
-    const a = parseFloat(amount) || 0;
-    const r = parseFloat(rate) || 0;
-    const t = parseInt(term) || 1;
-    const interest = a * (r / 100) * (t / 12);
-    const total = a + interest;
-    return { monthly: total / t, total, interest };
-  };
-  const calc = calcPayment();
+  const selectedNewLoanCategory =
+    selectedCategoryId !== "none"
+      ? categories.find((c) => String(c.id) === selectedCategoryId)
+      : undefined;
+  const previewRate = parseFloat(rate) || 0;
+  const previewTerm = parseInt(term, 10) || 1;
+  const calc = computeLoanPreview(amt, previewRate, previewTerm);
 
   const loansList = loans ?? [];
   const loansOpen = loansList.filter((l) => l.status !== "pago");
@@ -790,7 +915,10 @@ export default function LoansPage() {
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Novo Empréstimo</DialogTitle>
-                <p className="text-sm text-muted-foreground">Preencha os dados e ajuste juros e parcelas conforme necessário.</p>
+                <p className="text-sm text-muted-foreground">
+                  Escolha a <span className="font-medium text-foreground">categoria</span> em Configurações: a taxa e o prazo
+                  padrão vêm dela. Sem categoria, define juros e parcelas manualmente.
+                </p>
               </DialogHeader>
               <div className="space-y-4">
                 <Tabs defaultValue="dados" className="w-full">
@@ -846,40 +974,77 @@ export default function LoansPage() {
                         )}
                       </div>
                     </div>
-                    <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                        Juros e parcelas — pode alterar manualmente
-                      </p>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label>Juros (%)</Label>
-                          <Input
-                            type="number"
-                            value={rate}
-                            onChange={(e) => setRate(e.target.value)}
-                            placeholder="5"
-                            step={0.5}
-                            className="mt-1"
-                          />
+                    {selectedCategoryId !== "none" && selectedNewLoanCategory ? (
+                      <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          Regras da categoria (Configurações)
+                        </p>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="text-muted-foreground text-xs block">Juro padrão</span>
+                            <span className="font-semibold">{selectedNewLoanCategory.default_interest_rate}%</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground text-xs block">Parcelas padrão</span>
+                            <span className="font-semibold">{selectedNewLoanCategory.default_term_months} meses</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground text-xs block">Frequência</span>
+                            <span className="font-medium">{selectedNewLoanCategory.frequency_days} dias</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground text-xs block">Parcelas permitidas</span>
+                            <span className="font-medium">
+                              {selectedNewLoanCategory.min_installments}–{selectedNewLoanCategory.max_installments}
+                            </span>
+                          </div>
+                          {(selectedNewLoanCategory.late_interest_rate ?? 0) > 0 && (
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground text-xs block">Juros de mora (categoria)</span>
+                              <span className="font-medium">
+                                {selectedNewLoanCategory.late_interest_rate}% / mês
+                                {selectedNewLoanCategory.max_late_interest_months != null
+                                  ? ` · máx. ${selectedNewLoanCategory.max_late_interest_months} meses`
+                                  : ""}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                        <div>
-                          <Label>Nº parcelas</Label>
-                          <Input
-                            type="number"
-                            value={term}
-                            onChange={(e) => setTerm(e.target.value)}
-                            placeholder="12"
-                            min={1}
-                            className="mt-1"
-                          />
+                        <p className="text-xs text-muted-foreground">
+                          Para mudar estes valores, edite a categoria no separador <span className="font-medium">Configurações</span>.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border bg-amber-500/10 p-4 space-y-3">
+                        <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                          Sem categoria — defina juros e parcelas manualmente
+                        </p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>Juros (%)</Label>
+                            <Input
+                              type="number"
+                              value={rate}
+                              onChange={(e) => setRate(e.target.value)}
+                              placeholder="5"
+                              step={0.5}
+                              className="mt-1"
+                            />
+                          </div>
+                          <div>
+                            <Label>Nº parcelas</Label>
+                            <Input
+                              type="number"
+                              value={term}
+                              onChange={(e) => setTerm(e.target.value)}
+                              placeholder="12"
+                              min={1}
+                              className="mt-1"
+                            />
+                          </div>
                         </div>
                       </div>
-                      {selectedCategoryId !== "none" && (
-                        <p className="text-xs text-muted-foreground">
-                          Valores sugeridos pela categoria — altere se precisar.
-                        </p>
-                      )}
-                    </div>
+                    )}
                   </TabsContent>
 
                   <TabsContent value="garantia" className="mt-4">
@@ -967,11 +1132,17 @@ export default function LoansPage() {
                   <div className="bg-primary/5 border border-primary/20 rounded-lg p-4 space-y-2 animate-fade-in">
                     <div className="flex items-center gap-2 text-primary mb-2">
                       <Calculator className="h-4 w-4" />
-                      <span className="text-sm font-medium">Simulação Automática</span>
+                      <span className="text-sm font-medium">Pré-visualização (igual ao cálculo do sistema)</span>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      Taxa aplicada: <strong>{previewRate}%</strong> · Parcelas: <strong>{previewTerm}</strong>
+                      {selectedCategoryId !== "none" && selectedNewLoanCategory && (
+                        <> · Categoria: <strong>{selectedNewLoanCategory.name}</strong></>
+                      )}
+                    </p>
                     <div className="grid grid-cols-3 gap-3 text-sm">
-                      <div><span className="text-muted-foreground block text-xs">Parcela mensal</span><p className="font-bold">{formatCurrency(calc.monthly)}</p></div>
-                      <div><span className="text-muted-foreground block text-xs">Total juros</span><p className="font-bold">{formatCurrency(calc.interest)}</p></div>
+                      <div><span className="text-muted-foreground block text-xs">Parcela (média)</span><p className="font-bold">{formatCurrency(calc.monthly)}</p></div>
+                      <div><span className="text-muted-foreground block text-xs">Total juros</span><p className="font-bold">{formatCurrency(calc.interestTotal)}</p></div>
                       <div><span className="text-muted-foreground block text-xs">Total a pagar</span><p className="font-bold">{formatCurrency(calc.total)}</p></div>
                     </div>
                   </div>
@@ -983,8 +1154,8 @@ export default function LoansPage() {
                     createLoan.isLoading ||
                     !selectedClientId ||
                     !amount.trim() ||
-                    !rate.trim() ||
-                    !term.trim()
+                    !term.trim() ||
+                    (selectedCategoryId === "none" && !rate.trim())
                   }
                   onClick={() => {
                     const client = parseInt(selectedClientId, 10);
@@ -1141,9 +1312,9 @@ export default function LoansPage() {
               <div>
                 <h3 className="font-semibold text-lg">Categorias de Empréstimo</h3>
                 <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-                  Defina tipos de empréstimo como mensal, quinzenal ou anual. Cada categoria guarda a
-                  frequência dos pagamentos, limites de prazo, número de parcelas e quando o cliente pode
-                  perder o bem de garantia.
+                  Cada categoria define <strong>prazos em dias</strong> (duração mínima/máxima do contrato),
+                  intervalo entre pagamentos, parcelas, juros e <strong>termos e condições (T&C)</strong> que
+                  entram no contrato. O sistema valida que mínimo ≤ máximo em dias, parcelas e montantes.
                 </p>
               </div>
               {canAddLoanCategory && (
@@ -1158,8 +1329,9 @@ export default function LoansPage() {
                 <thead>
                   <tr className="border-b bg-muted/30">
                     <th className="px-3 py-2 text-left font-medium text-muted-foreground">Nome</th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Juro / Parcelas</th>
                     <th className="px-3 py-2 text-left font-medium text-muted-foreground">Frequência</th>
-                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Prazo (dias)</th>
+                    <th className="px-3 py-2 text-left font-medium text-muted-foreground">Duração (dias)</th>
                     <th className="px-3 py-2 text-left font-medium text-muted-foreground">Garantia</th>
                     <th className="px-3 py-2 text-center font-medium text-muted-foreground">Activa</th>
                     <th className="px-3 py-2 text-right font-medium text-muted-foreground">Acções</th>
@@ -1168,7 +1340,7 @@ export default function LoansPage() {
                 <tbody>
                   {categories.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                      <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
                         Nenhuma categoria configurada. Ex.: “Mensal padrão”, “Anual com garantia forte”.
                       </td>
                     </tr>
@@ -1184,6 +1356,16 @@ export default function LoansPage() {
                               </span>
                             )}
                           </div>
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className="font-medium tabular-nums">{c.default_interest_rate}%</span>
+                          <span className="text-muted-foreground"> · </span>
+                          <span className="tabular-nums">{c.default_term_months} meses</span>
+                          {(c.late_interest_rate ?? 0) > 0 && (
+                            <span className="block text-[11px] text-muted-foreground">
+                              Mora: {c.late_interest_rate}%/mês
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           {c.frequency_days} dias
@@ -1360,8 +1542,9 @@ export default function LoansPage() {
               </DialogHeader>
 
               <Tabs defaultValue="details" className="mt-2">
-                <TabsList>
+                <TabsList className="flex-wrap h-auto gap-1">
                   <TabsTrigger value="details"><ScrollText className="h-4 w-4 mr-1" />Detalhes</TabsTrigger>
+                  <TabsTrigger value="garantia"><Shield className="h-4 w-4 mr-1" />Garantia</TabsTrigger>
                   <TabsTrigger value="amortization"><Table className="h-4 w-4 mr-1" />Amortização</TabsTrigger>
                   <TabsTrigger value="contract"><FileText className="h-4 w-4 mr-1" />Contrato</TabsTrigger>
                 </TabsList>
@@ -1432,7 +1615,15 @@ export default function LoansPage() {
                     </div>
                   </div>
 
-                  {selectedLoan.collateral && (
+                  {selectedLoan.collateral ? (
+                    <p className="text-xs text-muted-foreground">
+                      Item de garantia na aba <span className="font-medium text-foreground">Garantia</span>.
+                    </p>
+                  ) : null}
+                </TabsContent>
+
+                <TabsContent value="garantia" className="space-y-4">
+                  {selectedLoan.collateral ? (
                     <div className="border rounded-lg p-4 bg-muted/30">
                       <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                         <ShieldCheck className="h-4 w-4 text-primary" />
@@ -1441,7 +1632,7 @@ export default function LoansPage() {
                       <div className="text-sm space-y-1">
                         <p><span className="text-muted-foreground">Descrição:</span> {selectedLoan.collateral.description}</p>
                         <p><span className="text-muted-foreground">Tipo:</span> {COLLATERAL_TYPES.find((t) => t.value === selectedLoan.collateral!.item_type)?.label ?? selectedLoan.collateral!.item_type}</p>
-                        {selectedLoan.collateral.estimated_value && (
+                        {selectedLoan.collateral.estimated_value != null && selectedLoan.collateral.estimated_value > 0 && (
                           <p><span className="text-muted-foreground">Valor estimado:</span> {formatCurrency(selectedLoan.collateral.estimated_value)}</p>
                         )}
                         {selectedLoan.collateral.serial_number && (
@@ -1452,6 +1643,10 @@ export default function LoansPage() {
                         )}
                       </div>
                     </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-6 text-center">
+                      Nenhum item de garantia registado neste empréstimo.
+                    </p>
                   )}
                 </TabsContent>
 
@@ -1510,12 +1705,13 @@ export default function LoansPage() {
 
       {/* Edit Loan Dialog */}
       <Dialog open={!!editingLoan} onOpenChange={(o) => !o && setEditingLoan(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Editar Empréstimo</DialogTitle></DialogHeader>
           {editingLoan && (
             <LoanEditForm
               loan={editingLoan}
               clients={clients ?? []}
+              categories={categories}
               onSubmit={(payload) =>
                 updateLoan.mutate({ id: editingLoan.id, payload })
               }
@@ -1548,19 +1744,48 @@ export default function LoansPage() {
   );
 }
 
+function loanEditSyncToken(loan: ApiLoan): string {
+  return JSON.stringify({
+    id: loan.id,
+    client: loan.client,
+    category: loan.category ?? null,
+    amount: loan.amount,
+    interest_rate: loan.interest_rate,
+    term: loan.term,
+    start_date: loan.start_date,
+    end_date: loan.end_date,
+    collateral: loan.collateral
+      ? {
+          id: loan.collateral.id,
+          description: loan.collateral.description,
+          item_type: loan.collateral.item_type,
+          estimated_value: loan.collateral.estimated_value,
+          condition: loan.collateral.condition,
+          serial_number: loan.collateral.serial_number,
+          notes: loan.collateral.notes,
+        }
+      : null,
+  });
+}
+
 function LoanEditForm({
   loan,
   clients,
+  categories,
   onSubmit,
   isLoading,
 }: {
   loan: ApiLoan;
   clients: ApiClient[];
+  categories: ApiLoanCategory[];
   onSubmit: (payload: Parameters<typeof loansApi.update>[1]) => void;
   isLoading: boolean;
 }) {
   const c = loan.collateral;
   const [clientId, setClientId] = useState(String(loan.client));
+  const [categoryId, setCategoryId] = useState<string>(
+    loan.category != null ? String(loan.category) : "none",
+  );
   const [amount, setAmount] = useState(String(loan.amount));
   const [rate, setRate] = useState(String(loan.interest_rate));
   const [term, setTerm] = useState(String(loan.term));
@@ -1576,8 +1801,10 @@ function LoanEditForm({
     notes: c?.notes ?? "",
   });
 
+  const syncTok = loanEditSyncToken(loan);
   useEffect(() => {
     setClientId(String(loan.client));
+    setCategoryId(loan.category != null ? String(loan.category) : "none");
     setAmount(String(loan.amount));
     setRate(String(loan.interest_rate));
     setTerm(String(loan.term));
@@ -1593,85 +1820,172 @@ function LoanEditForm({
       serial_number: col?.serial_number ?? "",
       notes: col?.notes ?? "",
     });
-  }, [loan.id]);
+  }, [syncTok, loan]);
+
+  const selectedCat =
+    categoryId !== "none" ? categories.find((x) => String(x.id) === categoryId) : undefined;
+
+  const handleCategoryChange = (v: string) => {
+    setCategoryId(v);
+    if (v === "none") return;
+    const cat = categories.find((x) => String(x.id) === v);
+    if (cat) {
+      setRate(String(cat.default_interest_rate ?? 0));
+      setTerm(String(cat.default_term_months ?? 12));
+    }
+  };
+
+  const amt = parseFloat(amount) || 0;
+  const previewRate = parseFloat(rate) || 0;
+  const previewTerm = parseInt(term, 10) || 1;
+  const preview = computeLoanPreview(amt, previewRate, previewTerm);
 
   return (
     <div className="space-y-4">
-      <div>
-        <Label>Cliente</Label>
-        <Select value={clientId} onValueChange={setClientId}>
-          <SelectTrigger><SelectValue placeholder="Cliente" /></SelectTrigger>
-          <SelectContent>
-            {clients.filter((c) => c.status === "ativo").map((client) => (
-              <SelectItem key={client.id} value={String(client.id)}>{client.name}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <div><Label>Valor (MT)</Label><Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-        <div><Label>Juros (%)</Label><Input type="number" value={rate} onChange={(e) => setRate(e.target.value)} /></div>
-        <div><Label>Parcelas</Label><Input type="number" value={term} onChange={(e) => setTerm(e.target.value)} /></div>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div><Label>Data início</Label><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
-        <div><Label>Data fim</Label><Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
-      </div>
+      <Tabs defaultValue="dados" className="w-full">
+        <TabsList className="grid grid-cols-2 w-full">
+          <TabsTrigger value="dados">Dados do empréstimo</TabsTrigger>
+          <TabsTrigger value="garantia">Item de garantia</TabsTrigger>
+        </TabsList>
 
-      <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4 text-primary" />
-          <Label className="cursor-pointer flex-1">Item de garantia</Label>
-          <input type="checkbox" checked={hasCollateral} onChange={(e) => setHasCollateral(e.target.checked)} className="rounded" />
-        </div>
-        {hasCollateral && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-            <div className="sm:col-span-2">
-              <Label>Descrição *</Label>
-              <Input
-                placeholder="Ex: Bilhete de Identidade..."
-                value={collateral.description}
-                onChange={(e) => setCollateral((col) => ({ ...col, description: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label>Tipo</Label>
-              <Select value={collateral.item_type} onValueChange={(v) => setCollateral((col) => ({ ...col, item_type: v as typeof col.item_type }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {COLLATERAL_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>Valor estimado (MT)</Label>
-              <Input
-                type="number"
-                placeholder="Opcional"
-                value={collateral.estimated_value}
-                onChange={(e) => setCollateral((col) => ({ ...col, estimated_value: e.target.value }))}
-              />
-            </div>
-            <div>
-              <Label>Estado</Label>
-              <Select value={collateral.condition} onValueChange={(v) => setCollateral((col) => ({ ...col, condition: v as typeof col.condition }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {COLLATERAL_CONDITIONS.map((x) => <SelectItem key={x.value} value={x.value}>{x.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="sm:col-span-2">
-              <Label>Nº série / Identificação</Label>
-              <Input placeholder="Opcional" value={collateral.serial_number} onChange={(e) => setCollateral((col) => ({ ...col, serial_number: e.target.value }))} />
-            </div>
-            <div className="sm:col-span-2">
-              <Label>Observações</Label>
-              <Input placeholder="Opcional" value={collateral.notes} onChange={(e) => setCollateral((col) => ({ ...col, notes: e.target.value }))} />
-            </div>
+        <TabsContent value="dados" className="space-y-4 mt-4">
+          <div>
+            <Label>Cliente</Label>
+            <Select value={clientId} onValueChange={setClientId}>
+              <SelectTrigger><SelectValue placeholder="Cliente" /></SelectTrigger>
+              <SelectContent>
+                {clients.filter((cl) => cl.status === "ativo").map((client) => (
+                  <SelectItem key={client.id} value={String(client.id)}>{client.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        )}
-      </div>
+
+          <div>
+            <Label>Categoria</Label>
+            <Select value={categoryId} onValueChange={handleCategoryChange}>
+              <SelectTrigger><SelectValue placeholder="Sem categoria" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sem categoria</SelectItem>
+                {categories.filter((cat) => cat.is_active).map((cat) => (
+                  <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground mt-1">
+              Ao mudar a categoria, a taxa e o prazo são sugeridos a partir de Configurações; pode ajustar abaixo se este
+              contrato tiver condições específicas.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-3">
+              <Label>Valor (MT)</Label>
+              <Input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </div>
+            <div><Label>Juros (%)</Label><Input type="number" value={rate} onChange={(e) => setRate(e.target.value)} step={0.5} /></div>
+            <div><Label>Parcelas</Label><Input type="number" value={term} onChange={(e) => setTerm(e.target.value)} min={1} /></div>
+          </div>
+
+          {selectedCat && (
+            <div className="rounded-lg border bg-muted/20 p-3 text-xs space-y-1">
+              <p className="font-medium text-foreground">{selectedCat.name}</p>
+              <p className="text-muted-foreground">
+                Frequência {selectedCat.frequency_days} dias · Parcelas permitidas{" "}
+                {selectedCat.min_installments}–{selectedCat.max_installments}
+                {(selectedCat.late_interest_rate ?? 0) > 0
+                  ? ` · Mora ${selectedCat.late_interest_rate}%/mês`
+                  : ""}
+              </p>
+            </div>
+          )}
+
+          {amt > 0 && term.trim() && (
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2 text-primary text-sm font-medium">
+                <Calculator className="h-4 w-4" />
+                Pré-visualização
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-xs sm:text-sm">
+                <div>
+                  <span className="text-muted-foreground block text-[10px] sm:text-xs">Parcela</span>
+                  <span className="font-semibold">{formatCurrency(preview.monthly)}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[10px] sm:text-xs">Juros total</span>
+                  <span className="font-semibold">{formatCurrency(preview.interestTotal)}</span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[10px] sm:text-xs">Total a pagar</span>
+                  <span className="font-semibold">{formatCurrency(preview.total)}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Data início</Label><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
+            <div><Label>Data fim</Label><Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="garantia" className="mt-4 space-y-3">
+          <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-primary" />
+              <Label className="cursor-pointer flex-1">Item de garantia</Label>
+              <input type="checkbox" checked={hasCollateral} onChange={(e) => setHasCollateral(e.target.checked)} className="rounded" />
+            </div>
+            {hasCollateral && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div className="sm:col-span-2">
+                  <Label>Descrição *</Label>
+                  <Input
+                    placeholder="Ex: Bilhete de Identidade..."
+                    value={collateral.description}
+                    onChange={(e) => setCollateral((col) => ({ ...col, description: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Tipo</Label>
+                  <Select value={collateral.item_type} onValueChange={(v) => setCollateral((col) => ({ ...col, item_type: v as typeof col.item_type }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {COLLATERAL_TYPES.map((t) => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Valor estimado (MT)</Label>
+                  <Input
+                    type="number"
+                    placeholder="Opcional"
+                    value={collateral.estimated_value}
+                    onChange={(e) => setCollateral((col) => ({ ...col, estimated_value: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label>Estado</Label>
+                  <Select value={collateral.condition} onValueChange={(v) => setCollateral((col) => ({ ...col, condition: v as typeof col.condition }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {COLLATERAL_CONDITIONS.map((x) => <SelectItem key={x.value} value={x.value}>{x.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>Nº série / Identificação</Label>
+                  <Input placeholder="Opcional" value={collateral.serial_number} onChange={(e) => setCollateral((col) => ({ ...col, serial_number: e.target.value }))} />
+                </div>
+                <div className="sm:col-span-2">
+                  <Label>Observações</Label>
+                  <Input placeholder="Opcional" value={collateral.notes} onChange={(e) => setCollateral((col) => ({ ...col, notes: e.target.value }))} />
+                </div>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
 
       <Button
         className="w-full"
@@ -1698,6 +2012,7 @@ function LoanEditForm({
             : null;
           onSubmit({
             client: parseInt(clientId, 10),
+            category: categoryId === "none" ? null : parseInt(categoryId, 10),
             amount: parseFloat(amount) || 0,
             interest_rate: parseFloat(rate) || 0,
             term: parseInt(term, 10) || 1,

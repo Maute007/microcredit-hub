@@ -45,6 +45,7 @@ class LoanCategorySerializer(serializers.ModelSerializer):
             "name",
             "code",
             "description",
+            "terms_and_conditions",
             "min_amount",
             "max_amount",
             "frequency_days",
@@ -75,6 +76,56 @@ class LoanCategorySerializer(serializers.ModelSerializer):
             "collateral_grace_days": {"min_value": 0, "max_value": 3650},
         }
 
+    def validate(self, attrs):
+        inst = self.instance
+
+        def merged_int(key: str, default: int) -> int:
+            if key in attrs:
+                return int(attrs[key])
+            if inst is not None:
+                return int(getattr(inst, key))
+            return default
+
+        def merged_decimal(key: str, default: Decimal) -> Decimal:
+            if key in attrs:
+                return attrs[key]
+            if inst is not None:
+                return getattr(inst, key)
+            return default
+
+        def merged_max_amount():
+            if "max_amount" in attrs:
+                return attrs["max_amount"]
+            if inst is not None:
+                return getattr(inst, "max_amount")
+            return None
+
+        min_td = merged_int("min_term_days", 30)
+        max_td = merged_int("max_term_days", 365)
+        if min_td > max_td:
+            raise serializers.ValidationError(
+                {
+                    "max_term_days": "A duração máxima (dias) deve ser maior ou igual à duração mínima.",
+                    "min_term_days": "A duração mínima não pode ser superior à duração máxima.",
+                }
+            )
+        min_i = merged_int("min_installments", 1)
+        max_i = merged_int("max_installments", 12)
+        if min_i > max_i:
+            raise serializers.ValidationError(
+                {
+                    "max_installments": "O máximo de parcelas deve ser maior ou igual ao mínimo.",
+                    "min_installments": "O mínimo de parcelas não pode ser superior ao máximo.",
+                }
+            )
+        min_a = merged_decimal("min_amount", Decimal("0"))
+        max_a = merged_max_amount()
+        if max_a is not None and min_a > max_a:
+            raise serializers.ValidationError(
+                {"max_amount": "O montante máximo deve ser maior ou igual ao montante mínimo."}
+            )
+        return attrs
+
 
 class LoanSerializer(serializers.ModelSerializer):
     client_name = serializers.CharField(source="client.name", read_only=True)
@@ -85,6 +136,7 @@ class LoanSerializer(serializers.ModelSerializer):
     category_require_interest_paid_to_keep_collateral = serializers.BooleanField(
         source="category.require_interest_paid_to_keep_collateral", read_only=True, default=None
     )
+    category_terms_and_conditions = serializers.SerializerMethodField()
     paid_amount = serializers.SerializerMethodField()
     remaining_balance = serializers.SerializerMethodField()
     paid_installments = serializers.SerializerMethodField()
@@ -103,6 +155,7 @@ class LoanSerializer(serializers.ModelSerializer):
              "category_frequency_days",
              "category_collateral_grace_days",
              "category_require_interest_paid_to_keep_collateral",
+             "category_terms_and_conditions",
             "amount",
             "interest_rate",
             "term",
@@ -121,6 +174,12 @@ class LoanSerializer(serializers.ModelSerializer):
             "interest_rate": {"min_value": Decimal("0"), "max_value": Decimal("100")},
             "term": {"min_value": 1, "max_value": MAX_LOAN_TERM_MONTHS},
         }
+
+    def get_category_terms_and_conditions(self, obj):
+        c = getattr(obj, "category", None)
+        if not c:
+            return ""
+        return (getattr(c, "terms_and_conditions", None) or "").strip()
 
     def get_paid_amount(self, obj):
         val = getattr(obj, "_paid_amount", None)

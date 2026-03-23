@@ -26,6 +26,14 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", get_random_secret_key())
 
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() == "true"
 
+# Bootstrap (manage.py bootstrap_system / reset_environment): superutilizador inicial.
+# Em produção (DEBUG=False) defina BOOTSTRAP_SUPERUSER_PASSWORD no .env.
+BOOTSTRAP_SUPERUSER_USERNAME = os.getenv("BOOTSTRAP_SUPERUSER_USERNAME", "Maute007")
+_BOOTSTRAP_PWD = os.getenv("BOOTSTRAP_SUPERUSER_PASSWORD", "")
+if not _BOOTSTRAP_PWD and DEBUG:
+    _BOOTSTRAP_PWD = "Carlxyzs12!@"
+BOOTSTRAP_SUPERUSER_PASSWORD = _BOOTSTRAP_PWD
+
 # Inclui o domínio do frontend por defeito porque o Nginx do frontend
 # passa Host: euro-credito.makira7.com ao fazer proxy de /api/ para este socket
 ALLOWED_HOSTS: list[str] = _csv_env(

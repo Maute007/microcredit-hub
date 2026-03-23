@@ -151,6 +151,8 @@ class UserSerializer(serializers.ModelSerializer):
             "last_name",
             "password",
             "is_active",
+            "is_staff",
+            "is_superuser",
             "date_joined",
             "role",
             "role_id",
@@ -160,7 +162,20 @@ class UserSerializer(serializers.ModelSerializer):
             "permissions",
         ]
         read_only_fields = ["id", "date_joined"]
-        extra_kwargs = {"password": {"write_only": True, "required": False}}
+        extra_kwargs = {
+            "password": {"write_only": True, "required": False},
+            "is_staff": {"default": False},
+            "is_superuser": {"default": False},
+        }
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        actor = getattr(request, "user", None) if request else None
+        acting_super = bool(actor and actor.is_authenticated and actor.is_superuser)
+        if not acting_super:
+            attrs.pop("is_superuser", None)
+            attrs.pop("is_staff", None)
+        return attrs
 
     def create(self, validated_data):
         password = validated_data.pop("password", None)
@@ -257,6 +272,18 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             "login_description",
             "login_banner_color",
             "login_card_color",
+            "login_banner_title",
+            "login_banner_subtitle",
+            "login_banner_body",
+            "login_banner_text_align",
+            "login_banner_block_align",
+            "login_banner_vertical_align",
+            "login_banner_max_width",
+            "login_banner_padding",
+            "login_title_font_size",
+            "login_subtitle_font_size",
+            "login_body_font_size",
+            "login_show_feature_boxes",
             "is_locked",
             "locked_message",
             "updated_at",

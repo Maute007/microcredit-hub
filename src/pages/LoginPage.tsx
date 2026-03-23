@@ -3,6 +3,17 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Building2, ShieldCheck } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { systemApi, type ApiSystemSettings } from "@/lib/api";
+import {
+  loginBannerBodyStyle,
+  loginBannerBodyText,
+  loginBannerPanelStyle,
+  loginBannerSubtitleStyle,
+  loginBannerSubtitleText,
+  loginBannerTextBlockStyle,
+  loginBannerTitleStyle,
+  loginBannerTitleText,
+  loginShowFeatureBoxes,
+} from "@/lib/loginBannerStyles";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,11 +45,14 @@ export default function LoginPage() {
   const brandName = systemSettings?.name || vendorName;
   const primaryColor = systemSettings?.primary_color || "#0f766e";
   const tagline = systemSettings?.tagline || "Gestão moderna de microcrédito.";
-  const loginDescription =
-    systemSettings?.login_description ||
+  const defaultBody =
     "Organize clientes, empréstimos, pagamentos, recursos humanos e contabilidade numa única plataforma. Acompanhe a carteira, fluxo de caixa e risco em tempo real.";
+  const loginDescription = loginBannerBodyText(systemSettings, defaultBody);
+  const bannerTitle = loginBannerTitleText(systemSettings, tagline);
+  const bannerSubtitle = loginBannerSubtitleText(systemSettings);
   const loginBannerColor = systemSettings?.login_banner_color?.trim() || primaryColor;
   const loginCardColor = systemSettings?.login_card_color || "#ffffff";
+  const showFeatures = loginShowFeatureBoxes(systemSettings);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,8 +86,11 @@ export default function LoginPage() {
       <div className="w-full max-w-4xl rounded-2xl border bg-card shadow-lg overflow-hidden grid md:grid-cols-2">
         {/* Lado esquerdo: imagem + descrição */}
         <div
-          className="relative hidden md:flex flex-col justify-between p-8 text-primary-foreground"
-          style={{ background: `linear-gradient(135deg, ${loginBannerColor}, ${loginBannerColor}CC)` }}
+          className="relative hidden md:flex flex-col p-8 text-primary-foreground min-h-[420px]"
+          style={{
+            background: `linear-gradient(135deg, ${loginBannerColor}, ${loginBannerColor}CC)`,
+            ...loginBannerPanelStyle(systemSettings ?? null),
+          }}
         >
           <div className="absolute inset-0 opacity-15 pointer-events-none">
             <div
@@ -84,53 +101,71 @@ export default function LoginPage() {
               }}
             />
           </div>
-          <div className="relative">
-            <div className="inline-flex items-center gap-2 rounded-full bg-black/15 px-3 py-1 text-xs font-medium mb-4">
-              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-foreground/15">
-                {systemSettings?.logo_url ? (
-                  <img
-                    src={systemSettings.logo_url}
-                    alt={brandName}
-                    className="h-4 w-4 rounded-full object-cover"
-                  />
-                ) : (
-                  <Building2 className="h-3 w-3" />
-                )}
-              </span>
-              {brandName}
-            </div>
-            <h1 className="text-2xl font-bold leading-snug mb-3">
-              {tagline}
-            </h1>
-            <p className="text-sm text-primary-foreground/90 leading-relaxed">
-              {loginDescription}
-            </p>
-          </div>
-          <div className="relative mt-6 grid grid-cols-2 gap-3 text-xs">
-            <div className="rounded-xl bg-black/15 px-3 py-3">
-              <p className="font-semibold mb-1">Clientes & Empréstimos</p>
-              <p className="text-primary-foreground/85">
-                Registo de clientes, simulações e aprovação rápida de crédito.
+          <div className="relative flex flex-col flex-1 min-h-0 w-full">
+            <div className="relative" style={loginBannerTextBlockStyle(systemSettings ?? null)}>
+              <div className="inline-flex items-center gap-2 rounded-full bg-black/15 px-3 py-1 text-xs font-medium mb-4">
+                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-foreground/15">
+                  {systemSettings?.logo_url ? (
+                    <img
+                      src={systemSettings.logo_url}
+                      alt={brandName}
+                      className="h-4 w-4 rounded-full object-cover"
+                    />
+                  ) : (
+                    <Building2 className="h-3 w-3" />
+                  )}
+                </span>
+                {brandName}
+              </div>
+              <h1
+                className={`font-bold leading-snug mb-2 ${systemSettings?.login_title_font_size?.trim() ? "" : "text-2xl"}`}
+                style={loginBannerTitleStyle(systemSettings ?? null)}
+              >
+                {bannerTitle}
+              </h1>
+              {bannerSubtitle ? (
+                <p
+                  className={`text-primary-foreground/95 mb-3 ${systemSettings?.login_subtitle_font_size?.trim() ? "" : "text-base"}`}
+                  style={loginBannerSubtitleStyle(systemSettings ?? null)}
+                >
+                  {bannerSubtitle}
+                </p>
+              ) : null}
+              <p
+                className={`text-primary-foreground/90 leading-relaxed whitespace-pre-wrap ${systemSettings?.login_body_font_size?.trim() ? "" : "text-sm"}`}
+                style={loginBannerBodyStyle(systemSettings ?? null)}
+              >
+                {loginDescription}
               </p>
             </div>
-            <div className="rounded-xl bg-black/15 px-3 py-3">
-              <p className="font-semibold mb-1">Pagamentos & Alertas</p>
-              <p className="text-primary-foreground/85">
-                Controle de cobranças, atrasos e recebimentos num só ecrã.
-              </p>
-            </div>
-            <div className="rounded-xl bg-black/15 px-3 py-3">
-              <p className="font-semibold mb-1">Recursos Humanos</p>
-              <p className="text-primary-foreground/85">
-                Gestão de equipa, férias, presenças e salários.
-              </p>
-            </div>
-            <div className="rounded-xl bg-black/15 px-3 py-3">
-              <p className="font-semibold mb-1">Relatórios</p>
-              <p className="text-primary-foreground/85">
-                Indicadores de desempenho e relatórios financeiros claros.
-              </p>
-            </div>
+            {showFeatures ? (
+              <div className="relative mt-6 grid grid-cols-2 gap-3 text-xs">
+                <div className="rounded-xl bg-black/15 px-3 py-3">
+                  <p className="font-semibold mb-1">Clientes & Empréstimos</p>
+                  <p className="text-primary-foreground/85">
+                    Registo de clientes, simulações e aprovação rápida de crédito.
+                  </p>
+                </div>
+                <div className="rounded-xl bg-black/15 px-3 py-3">
+                  <p className="font-semibold mb-1">Pagamentos & Alertas</p>
+                  <p className="text-primary-foreground/85">
+                    Controle de cobranças, atrasos e recebimentos num só ecrã.
+                  </p>
+                </div>
+                <div className="rounded-xl bg-black/15 px-3 py-3">
+                  <p className="font-semibold mb-1">Recursos Humanos</p>
+                  <p className="text-primary-foreground/85">
+                    Gestão de equipa, férias, presenças e salários.
+                  </p>
+                </div>
+                <div className="rounded-xl bg-black/15 px-3 py-3">
+                  <p className="font-semibold mb-1">Relatórios</p>
+                  <p className="text-primary-foreground/85">
+                    Indicadores de desempenho e relatórios financeiros claros.
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 

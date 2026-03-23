@@ -11,6 +11,8 @@ from rest_framework import permissions
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
+from .models import User
+
 # Mapeamento: (app_label, model_name) -> nome legível da entidade
 AUDIT_ENTITIES = {
     ("accounts", "HistoricalUser"): "Utilizador",
@@ -60,6 +62,19 @@ def _build_audit_queryset(app_label, model_name, user_id=None, date_from=None, d
         qs = qs.filter(history_date__date__lte=date_to)
     if action_type and action_type in ("+", "~", "-"):
         qs = qs.filter(history_type=action_type)
+    return qs
+
+
+def _apply_audit_superuser_visibility(request, app_label, model_name, qs):
+    """Superutilizadores não aparecem em auditoria para utilizadores normais."""
+    if request.user.is_superuser:
+        return qs
+    if (app_label, model_name) == ("accounts", "HistoricalUser"):
+        super_ids = User.objects.filter(is_superuser=True).values_list("id", flat=True)
+        return qs.exclude(id__in=super_ids)
+    if (app_label, model_name) == ("accounts", "HistoricalProfile"):
+        super_ids = User.objects.filter(is_superuser=True).values_list("id", flat=True)
+        return qs.exclude(user_id__in=super_ids)
     return qs
 
 
@@ -186,6 +201,7 @@ class AuditLogView(APIView):
             qs = _build_audit_queryset(app_label, model_name, user_id, date_from, date_to, action_type)
             if qs is None:
                 continue
+            qs = _apply_audit_superuser_visibility(request, app_label, model_name, qs)
             for rec in qs.order_by("-history_date")[:fetch_per_model]:
                 rows.append(_record_to_row(rec, entity_name, app_label, model_name))
 
@@ -349,6 +365,15 @@ class AuditLogDetailView(APIView):
         if not rec:
             return Response({"detail": "Registo não encontrado"}, status=404)
 
+        if not request.user.is_superuser:
+            if (app_label, model_name) == ("accounts", "HistoricalUser"):
+                if User.objects.filter(pk=getattr(rec, "id", None), is_superuser=True).exists():
+                    return Response({"detail": "Registo não encontrado"}, status=404)
+            if (app_label, model_name) == ("accounts", "HistoricalProfile"):
+                uid = getattr(rec, "user_id", None)
+                if uid and User.objects.filter(pk=uid, is_superuser=True).exists():
+                    return Response({"detail": "Registo não encontrado"}, status=404)
+
         display_name = _get_display_name(
             rec, AUDIT_ENTITIES.get((app_label, model_name), entity), app_label, model_name
         )
@@ -409,6 +434,7 @@ class AuditLogLatestView(APIView):
             qs = _build_audit_queryset(app_label, model_name, user_id=user_id)
             if qs is None:
                 continue
+            qs = _apply_audit_superuser_visibility(request, app_label, model_name, qs)
             for rec in qs.order_by("-history_date")[:per_model]:
                 rows.append(_record_to_row(rec, entity_name, app_label, model_name))
 

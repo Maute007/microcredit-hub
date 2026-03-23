@@ -4,6 +4,34 @@ const API_BASE = rawApiBase ? rawApiBase.replace(/\/$/, "") : "/api";
 let onUnauthorized: (() => void) | null = null;
 let sessionExpired = false;
 
+/** Um único refresh em voo para vários 401 simultâneos (access expirado). */
+let refreshInFlight: Promise<boolean> | null = null;
+
+function scheduleRefreshAttempt(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const res = await fetch(`${API_BASE}/auth/refresh/`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      return res.ok;
+    })();
+    void refreshInFlight.finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+function isAuthRecoveryPath(path: string): boolean {
+  return (
+    path.includes("/auth/login") ||
+    path.includes("/auth/refresh") ||
+    path.includes("/auth/me")
+  );
+}
+
 export function setOnUnauthorized(fn: (() => void) | null) {
   onUnauthorized = fn;
 }
@@ -28,10 +56,11 @@ export class ApiError extends Error {
 
 async function fetchApi<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  didRefreshRetry = false
 ): Promise<T> {
-  // Quando sessão expirou, bloquear novos pedidos EXCEPTO login/refresh para permitir reautenticação
-  if (sessionExpired && !path.includes("/auth/login") && !path.includes("/auth/refresh")) {
+  // Sessão considerada morta: bloquear pedidos exceto login/refresh/me (tentar recuperar com refresh em 401)
+  if (sessionExpired && !isAuthRecoveryPath(path)) {
     throw new ApiError("Sessão expirada", 401);
   }
   const url = path.startsWith("http") ? path : `${API_BASE}${path}`;
@@ -68,8 +97,22 @@ async function fetchApi<T>(
 
   if (!res.ok) {
     if (res.status === 401) {
+      const canTryRefresh =
+        !didRefreshRetry &&
+        !path.includes("/auth/login") &&
+        !path.includes("/auth/refresh") &&
+        !path.includes("/auth/logout");
+
+      if (canTryRefresh) {
+        const refreshed = await scheduleRefreshAttempt();
+        if (refreshed) {
+          sessionExpired = false;
+          return fetchApi<T>(path, options, true);
+        }
+      }
+
       sessionExpired = true;
-      // Evitar loop infinito: não chamar onUnauthorized de novo a partir do próprio logout
+      // Evitar loop: não chamar onUnauthorized a partir do próprio logout
       if (!path.includes("/auth/logout") && onUnauthorized) {
         onUnauthorized();
       }
@@ -203,6 +246,18 @@ export interface ApiSystemSettings {
   login_description?: string;
   login_banner_color?: string;
   login_card_color?: string;
+  login_banner_title?: string;
+  login_banner_subtitle?: string;
+  login_banner_body?: string;
+  login_banner_text_align?: string;
+  login_banner_block_align?: string;
+  login_banner_vertical_align?: string;
+  login_banner_max_width?: string;
+  login_banner_padding?: string;
+  login_title_font_size?: string;
+  login_subtitle_font_size?: string;
+  login_body_font_size?: string;
+  login_show_feature_boxes?: boolean;
   updated_at: string;
   is_locked: boolean;
   locked_message: string;
@@ -216,7 +271,32 @@ export const systemApi = {
       .then((r) => (r.ok ? (r.json() as Promise<ApiSystemSettings>) : Promise.resolve(null)))
       .catch(() => null),
   get: () => fetchApi<ApiSystemSettings>("/auth/settings/"),
-  update: (payload: Partial<Pick<ApiSystemSettings, "name" | "logo_url" | "primary_color" | "tagline" | "login_description" | "login_banner_color" | "login_card_color">>) =>
+  update: (
+    payload: Partial<
+      Pick<
+        ApiSystemSettings,
+        | "name"
+        | "logo_url"
+        | "primary_color"
+        | "tagline"
+        | "login_description"
+        | "login_banner_color"
+        | "login_card_color"
+        | "login_banner_title"
+        | "login_banner_subtitle"
+        | "login_banner_body"
+        | "login_banner_text_align"
+        | "login_banner_block_align"
+        | "login_banner_vertical_align"
+        | "login_banner_max_width"
+        | "login_banner_padding"
+        | "login_title_font_size"
+        | "login_subtitle_font_size"
+        | "login_body_font_size"
+        | "login_show_feature_boxes"
+      >
+    >,
+  ) =>
     fetchApi<ApiSystemSettings>("/auth/settings/", {
       method: "PATCH",
       body: JSON.stringify(payload),
@@ -278,6 +358,8 @@ export interface ApiUser {
   first_name: string;
   last_name: string;
   is_active: boolean;
+  is_staff?: boolean;
+  is_superuser?: boolean;
   date_joined: string;
   role?: { id: number; code: string; name: string } | null;
   role_id?: number | null;
@@ -355,6 +437,7 @@ export interface ApiLoan {
   category_frequency_days?: number | null;
   category_collateral_grace_days?: number | null;
   category_require_interest_paid_to_keep_collateral?: boolean | null;
+  category_terms_and_conditions?: string;
   amount: number;
   interest_rate: number;
   term: number;
@@ -474,6 +557,7 @@ export const loansApi = {
     }[]>(`/loans/${loanId}/amortization/`),
   update: (id: number, payload: Partial<{
     client: number;
+    category?: number | null;
     amount: number;
     interest_rate: number;
     term: number;
@@ -501,6 +585,8 @@ export interface ApiLoanCategory {
   name: string;
   code: string;
   description?: string;
+  /** Termos e condições da categoria (aparecem no contrato do empréstimo) */
+  terms_and_conditions?: string;
   min_amount?: number;
   max_amount?: number | null;
   frequency_days: number;
@@ -535,6 +621,7 @@ export const loanCategoriesApi = {
     name: string;
     code: string;
     description?: string;
+    terms_and_conditions?: string;
     min_amount?: number;
     max_amount?: number | null;
     frequency_days: number;

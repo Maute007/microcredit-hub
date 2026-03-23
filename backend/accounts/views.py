@@ -1,5 +1,6 @@
 from django.contrib.auth.models import Permission
 from django.db.models import Prefetch, Q
+from django.http import Http404
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -47,6 +48,8 @@ class UserViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = _user_queryset()
+        if not self.request.user.is_superuser:
+            qs = qs.filter(is_superuser=False)
         is_active = self.request.query_params.get("is_active")
         role_id = self.request.query_params.get("role")
         search = self.request.query_params.get("search", "").strip()
@@ -66,6 +69,12 @@ class UserViewSet(viewsets.ModelViewSet):
             qs = qs.order_by(ordering)
         return qs
 
+    def get_object(self):
+        obj = super().get_object()
+        if obj.is_superuser and not self.request.user.is_superuser:
+            raise Http404()
+        return obj
+
 
 class ProfileViewSet(viewsets.ModelViewSet):
     """CRUD de perfis (ligados a User)."""
@@ -74,7 +83,10 @@ class ProfileViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAdminUser]
 
     def get_queryset(self):
-        return Profile.objects.select_related("user").order_by("id")
+        qs = Profile.objects.select_related("user").order_by("id")
+        if not self.request.user.is_superuser:
+            qs = qs.exclude(user__is_superuser=True)
+        return qs
 
 
 class RoleViewSet(viewsets.ModelViewSet):
@@ -87,9 +99,12 @@ class RoleViewSet(viewsets.ModelViewSet):
     ordering_fields = ["id", "code", "name"]
 
     def get_queryset(self):
-        return Role.objects.prefetch_related(
+        qs = Role.objects.prefetch_related(
             Prefetch("permissions", queryset=Permission.objects.select_related("content_type"))
-        ).order_by("name")
+        )
+        if not self.request.user.is_superuser:
+            qs = qs.exclude(code="superuser")
+        return qs.order_by("name")
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()

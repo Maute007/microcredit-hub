@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "bootstrap:backend": "cd backend && python3 manage.py bootstrap_system"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -1,0 +1,102 @@
+{
+  "_readme": "permissions_mode: 'all' = todas as permissões Django; 'none' = nenhuma; 'list' = usar 'permissions'. Edite esta lista para parametrizar papéis.",
+  "roles": [
+    {
+      "code": "superuser",
+      "name": "Superutilizador",
+      "description": "Papel de sistema. Utilizadores com is_superuser=true têm '*' na API.",
+      "is_system": true,
+      "permissions_mode": "none"
+    },
+    {
+      "code": "default",
+      "name": "Utilizador padrão",
+      "description": "Papel de sistema para novos utilizadores sem função específica.",
+      "is_system": true,
+      "permissions_mode": "none"
+    },
+    {
+      "code": "gerente",
+      "name": "Gerente",
+      "description": "Acesso total às operações do sistema (equivalente a permissões completas).",
+      "is_system": false,
+      "permissions_mode": "all"
+    },
+    {
+      "code": "rh",
+      "name": "Recursos Humanos",
+      "description": "Acesso total (mesmo perfil de permissões que Gerente).",
+      "is_system": false,
+      "permissions_mode": "all"
+    },
+    {
+      "code": "gestor_credito",
+      "name": "Gestor de crédito",
+      "description": "Cadastro e gestão de clientes (crédito focado em clientes).",
+      "is_system": false,
+      "permissions_mode": "list",
+      "permissions": [
+        "view_client",
+        "add_client",
+        "change_client",
+        "delete_client"
+      ]
+    },
+    {
+      "code": "assistente_admin",
+      "name": "Assistente administrativo",
+      "description": "Operações administrativas do dia-a-dia (sem gestão de utilizadores nem categorias de empréstimo).",
+      "is_system": false,
+      "permissions_mode": "list",
+      "permissions": [
+        "view_client",
+        "add_client",
+        "change_client",
+        "view_loan",
+        "view_loancategory",
+        "view_payment",
+        "add_payment",
+        "change_payment",
+        "view_calendarevent",
+        "add_calendarevent",
+        "change_calendarevent",
+        "view_transaction",
+        "add_transaction",
+        "change_transaction",
+        "view_tax",
+        "view_employee",
+        "view_collateral"
+      ]
+    }
+  ],
+  "demo_users": [
+    {
+      "username": "gerente.demo",
+      "email": "gerente@demo.local",
+      "first_name": "Gerente",
+      "role_code": "gerente",
+      "is_staff": true
+    },
+    {
+      "username": "gestor.demo",
+      "email": "gestor@demo.local",
+      "first_name": "Gestor Crédito",
+      "role_code": "gestor_credito",
+      "is_staff": false
+    },
+    {
+      "username": "rh.demo",
+      "email": "rh@demo.local",
+      "first_name": "RH",
+      "role_code": "rh",
+      "is_staff": true
+    },
+    {
+      "username": "assistente.demo",
+      "email": "assistente@demo.local",
+      "first_name": "Assistente",
+      "role_code": "assistente_admin",
+      "is_staff": false
+    }
+  ]
+}

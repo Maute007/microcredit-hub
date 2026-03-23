@@ -55,6 +55,22 @@ Requer autenticação. Coloca refresh token em blacklist e remove cookies.
 
 Requer autenticação. Retorna utilizador com `profile`, `role`, `permissions`.
 
+### Papéis (roles) e limpeza da base
+
+Os **papéis** são o modelo `Role` (não o `Group` do Django). As permissões efectivas vêm de `role.permissions` + `user_permissions`; superusers recebem `["*"]` na API.
+
+- **Configuração:** `backend/accounts/config/role_permissions.json` — edite `permissions_mode` (`all` / `none` / `list`) e o array `permissions` (codenames, ex.: `view_client`).
+- **Sincronizar papéis sem apagar dados:** `python manage.py seed_roles`
+- **Apagar todos os dados + histórico + repovoar permissões e papéis:**  
+  `python manage.py reset_environment --confirm [--demo-users --password=...] [--admin-password=...]`  
+  (executa `flush`, `migrate` para recriar `auth_permission`, depois `seed_roles` e o superutilizador bootstrap).
+
+- **Arranque automático (migrações + papéis + `Maute007` ou `BOOTSTRAP_SUPERUSER_*`):**  
+  `python manage.py bootstrap_system`  
+  (ou `npm run bootstrap:backend` na raiz do repo). Com `DEBUG=True` e sem `BOOTSTRAP_SUPERUSER_PASSWORD` no `.env`, usa palavra-passe de desenvolvimento definida em `settings.py`.
+
+Documentação: `backend/accounts/config/README.md`.
+
 ---
 
 ## 2. Users / Profiles / Roles

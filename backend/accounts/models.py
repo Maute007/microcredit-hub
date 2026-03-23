@@ -129,6 +129,73 @@ class SystemSettings(models.Model):
       verbose_name=_("Mensagem de bloqueio"),
       help_text=_("Texto mostrado aos utilizadores quando o sistema está temporariamente indisponível."),
   )
+  # --- Banner login / hero: texto e alinhamento (parametrizável) ---
+  login_banner_title = models.CharField(
+      max_length=300,
+      blank=True,
+      verbose_name=_("Título do banner (login)"),
+      help_text=_("Se vazio, usa a frase de impacto (tagline)."),
+  )
+  login_banner_subtitle = models.CharField(
+      max_length=400,
+      blank=True,
+      verbose_name=_("Subtítulo do banner"),
+  )
+  login_banner_body = models.TextField(
+      blank=True,
+      verbose_name=_("Corpo do banner"),
+      help_text=_("Texto principal. Se vazio, usa a descrição do painel esquerdo."),
+  )
+  login_banner_text_align = models.CharField(
+      max_length=12,
+      default="left",
+      verbose_name=_("Alinhamento do texto"),
+      help_text=_("left, center, right ou justify"),
+  )
+  login_banner_block_align = models.CharField(
+      max_length=12,
+      default="start",
+      verbose_name=_("Posição horizontal do bloco"),
+      help_text=_("start, center ou end — no painel."),
+  )
+  login_banner_vertical_align = models.CharField(
+      max_length=12,
+      default="between",
+      verbose_name=_("Distribuição vertical do painel"),
+      help_text=_("start, center, end ou between (espaça topo e rodapé)."),
+  )
+  login_banner_max_width = models.CharField(
+      max_length=32,
+      default="100%",
+      verbose_name=_("Largura máx. do bloco de texto"),
+      help_text=_("Ex.: 36rem, 90%, 100%"),
+  )
+  login_banner_padding = models.CharField(
+      max_length=32,
+      default="0",
+      verbose_name=_("Padding interno do bloco"),
+      help_text=_("Ex.: 0, 1rem, 1.5rem 2rem"),
+  )
+  login_title_font_size = models.CharField(
+      max_length=16,
+      blank=True,
+      verbose_name=_("Tamanho do título"),
+      help_text=_("Ex.: 1.75rem ou 28px. Vazio = tamanho responsivo padrão."),
+  )
+  login_subtitle_font_size = models.CharField(
+      max_length=16,
+      blank=True,
+      verbose_name=_("Tamanho do subtítulo"),
+  )
+  login_body_font_size = models.CharField(
+      max_length=16,
+      blank=True,
+      verbose_name=_("Tamanho do corpo"),
+  )
+  login_show_feature_boxes = models.BooleanField(
+      default=True,
+      verbose_name=_("Mostrar caixas de destaques no login"),
+  )
   updated_at = models.DateTimeField(auto_now=True)
 
   class Meta:

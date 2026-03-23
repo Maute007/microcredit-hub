@@ -36,7 +36,7 @@ class LoanViewSet(ModelViewSet):
     def get_queryset(self):
         refresh_loan_statuses_batch()  # Atualiza atrasados (quando data passa)
         qs = (
-            Loan.objects.select_related("client")
+            Loan.objects.select_related("client", "category")
             .prefetch_related("payments", "collateral")
             .annotate(
                 _paid_amount=Sum(

@@ -10,6 +10,14 @@ import {
   type ApiSystemSettings,
 } from "@/lib/api";
 import {
+  loginBannerBodyStyle,
+  loginBannerBodyText,
+  loginBannerSubtitleStyle,
+  loginBannerSubtitleText,
+  loginBannerTextBlockStyle,
+  loginBannerTitleStyle,
+} from "@/lib/loginBannerStyles";
+import {
   Wallet,
   TrendingUp,
   AlertTriangle,
@@ -65,6 +73,11 @@ export default function DashboardPage() {
   const primaryColor = systemSettings?.primary_color ?? "#0f766e";
   const bannerColor = systemSettings?.login_banner_color?.trim() || primaryColor;
   const logoUrl = systemSettings?.logo_url;
+  const heroTitle = systemSettings?.login_banner_title?.trim() || brandName;
+  const heroSubtitle = loginBannerSubtitleText(systemSettings ?? null);
+  const heroBodyDefault =
+    "Clientes, empréstimos, pagamentos, recursos humanos e contabilidade. Acompanhe a carteira e fluxo de caixa em tempo real.";
+  const heroBody = loginBannerBodyText(systemSettings ?? null, heroBodyDefault);
 
   const rawSummary = dashboard?.summary;
   const summary = {
@@ -167,8 +180,8 @@ export default function DashboardPage() {
           }}
           aria-hidden
         />
-        <div className="relative px-6 py-12 lg:py-16 lg:px-10">
-          <div className="max-w-4xl">
+        <div className="relative px-6 py-12 lg:py-16 lg:px-10 flex flex-col w-full">
+          <div className="max-w-4xl w-full" style={loginBannerTextBlockStyle(systemSettings ?? null)}>
             <div className="inline-flex items-center gap-2 rounded-full bg-white/20 px-4 py-1.5 text-sm font-medium text-white/95 mb-4">
               {logoUrl ? (
                 <img src={logoUrl} alt="" className="h-4 w-4 rounded" />
@@ -177,12 +190,25 @@ export default function DashboardPage() {
               )}
               {tagline}
             </div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white tracking-tight mb-3">
-              {brandName}
+            <h1
+              className={`font-bold text-white tracking-tight mb-2 ${systemSettings?.login_title_font_size?.trim() ? "" : "text-2xl sm:text-3xl lg:text-4xl"}`}
+              style={loginBannerTitleStyle(systemSettings ?? null)}
+            >
+              {heroTitle}
             </h1>
-            <p className="text-base sm:text-lg text-white/90 max-w-2xl leading-relaxed">
-              {systemSettings?.login_description ||
-                "Clientes, empréstimos, pagamentos, recursos humanos e contabilidade. Acompanhe a carteira e fluxo de caixa em tempo real."}
+            {heroSubtitle ? (
+              <p
+                className={`text-white/95 mb-2 ${systemSettings?.login_subtitle_font_size?.trim() ? "" : "text-lg"}`}
+                style={loginBannerSubtitleStyle(systemSettings ?? null)}
+              >
+                {heroSubtitle}
+              </p>
+            ) : null}
+            <p
+              className={`text-white/90 max-w-2xl leading-relaxed whitespace-pre-wrap ${systemSettings?.login_body_font_size?.trim() ? "" : "text-base sm:text-lg"}`}
+              style={loginBannerBodyStyle(systemSettings ?? null)}
+            >
+              {heroBody}
             </p>
             <div className="flex flex-wrap gap-6 mt-6 text-white/80">
               <span className="flex items-center gap-2">

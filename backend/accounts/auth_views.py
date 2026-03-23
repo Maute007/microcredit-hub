@@ -1,21 +1,21 @@
 from django.conf import settings
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .serializers import CustomTokenObtainPairSerializer
 
 
-def _set_jwt_cookies(response: Response, refresh: RefreshToken) -> None:
+def _set_jwt_cookie_strings(response: Response, access_str: str, refresh_str: str) -> None:
     """Define cookies JWT como session cookies (sem max_age/expires).
     O browser elimina-os automaticamente ao encerrar — sem sessão persistente."""
-    refresh_str = str(refresh)
-    access_str = str(refresh.access_token)
     secure = getattr(settings, "JWT_COOKIE_SECURE", False)
     samesite = getattr(settings, "JWT_COOKIE_SAMESITE", "Lax")
     access_cookie = getattr(settings, "JWT_ACCESS_COOKIE", "access_token")
@@ -37,6 +37,10 @@ def _set_jwt_cookies(response: Response, refresh: RefreshToken) -> None:
         secure=secure,
         samesite=samesite,
     )
+
+
+def _set_jwt_cookies(response: Response, refresh: RefreshToken) -> None:
+    _set_jwt_cookie_strings(response, str(refresh.access_token), str(refresh))
 
 
 def _clear_jwt_cookies(response: Response) -> None:
@@ -76,18 +80,23 @@ class CookieTokenRefreshView(APIView):
                 {"detail": "Refresh token não encontrado."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+        serializer = TokenRefreshSerializer(data={"refresh": token_str})
         try:
-            refresh = RefreshToken(token_str)
-            response = Response({"detail": "Token renovado."})
-            _set_jwt_cookies(response, refresh)
-            return response
-        except TokenError:
+            serializer.is_valid(raise_exception=True)
+        except ValidationError:
             resp = Response(
                 {"detail": "Refresh token inválido ou expirado."},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
             _clear_jwt_cookies(resp)
             return resp
+        data = serializer.validated_data
+        access_str = data["access"]
+        # Sem rotação, o serializer só devolve access; mantém o mesmo refresh no cookie.
+        refresh_str = data.get("refresh", token_str)
+        response = Response({"detail": "Token renovado."})
+        _set_jwt_cookie_strings(response, access_str, refresh_str)
+        return response
 
 
 class CookieLogoutView(APIView):

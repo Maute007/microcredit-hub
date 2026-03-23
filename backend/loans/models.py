@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
@@ -11,6 +12,14 @@ class LoanCategory(models.Model):
     name = models.CharField(max_length=100, verbose_name=_("Nome"))
     code = models.CharField(max_length=50, unique=True, verbose_name=_("Código"))
     description = models.TextField(blank=True, verbose_name=_("Descrição"))
+    terms_and_conditions = models.TextField(
+        blank=True,
+        verbose_name=_("Termos e condições (T&C)"),
+        help_text=_(
+            "Texto legal ou comercial aplicável a esta categoria. "
+            "Aparece no contrato quando um empréstimo usa esta categoria."
+        ),
+    )
 
     # Intervalo de valor (para atribuição automática)
     min_amount = models.DecimalField(
@@ -37,11 +46,13 @@ class LoanCategory(models.Model):
     )
     min_term_days = models.PositiveIntegerField(
         default=30,
-        verbose_name=_("Prazo mínimo (dias)"),
+        verbose_name=_("Duração mínima do contrato (dias)"),
+        help_text=_("Menor prazo permitido para o empréstimo, em dias."),
     )
     max_term_days = models.PositiveIntegerField(
         default=365,
-        verbose_name=_("Prazo máximo (dias)"),
+        verbose_name=_("Duração máxima do contrato (dias)"),
+        help_text=_("Maior prazo permitido; deve ser ≥ duração mínima."),
     )
     min_installments = models.PositiveIntegerField(
         default=1,
@@ -106,6 +117,28 @@ class LoanCategory(models.Model):
 
     def __str__(self):
         return self.name
+
+    def clean(self):
+        super().clean()
+        errs = {}
+        if self.min_term_days > self.max_term_days:
+            errs["max_term_days"] = _(
+                "A duração máxima (dias) deve ser maior ou igual à duração mínima."
+            )
+        if self.min_installments > self.max_installments:
+            errs["max_installments"] = _(
+                "O número máximo de parcelas deve ser maior ou igual ao mínimo."
+            )
+        if self.max_amount is not None and self.min_amount > self.max_amount:
+            errs["max_amount"] = _(
+                "O montante máximo deve ser maior ou igual ao montante mínimo."
+            )
+        if errs:
+            raise ValidationError(errs)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 class Loan(models.Model):
