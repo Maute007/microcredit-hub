@@ -103,6 +103,13 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            {/* Compatibilidade: atalhos antigos de tarefas/agendamento redirecionam para Calendário */}
+            <Route path="/tasks" element={<Navigate to="/calendario" replace />} />
+            <Route path="/tarefas" element={<Navigate to="/calendario" replace />} />
+            <Route path="/suite/tasks" element={<Navigate to="/calendario" replace />} />
+            <Route path="/suite/tarefas" element={<Navigate to="/calendario" replace />} />
+            <Route path="/agendamento" element={<Navigate to="/calendario" replace />} />
+            <Route path="/schedule" element={<Navigate to="/calendario" replace />} />
             <Route
               path="/rh"
               element={
