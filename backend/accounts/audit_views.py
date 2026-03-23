@@ -12,6 +12,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 from .models import User
+from .permissions import CanViewAuditLogs
 
 # Mapeamento: (app_label, model_name) -> nome legível da entidade
 AUDIT_ENTITIES = {
@@ -179,7 +180,7 @@ def _record_to_row(rec, entity_name, app_label, model_name):
 class AuditLogView(APIView):
     """Histórico agregado de acções. Filtros: user, date_from, date_to, action_type. Paginação e exportação."""
 
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [CanViewAuditLogs]
 
     def get(self, request):
         user_id = request.query_params.get("user")
@@ -332,7 +333,7 @@ ENTITY_TO_MODEL = {v: (a, m) for (a, m), v in AUDIT_ENTITIES.items()}
 class AuditLogDetailView(APIView):
     """Detalhes de um registo de auditoria: campos alterados (diff). Requer entity e history_id."""
 
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [CanViewAuditLogs]
 
     def get(self, request):
         entity = request.query_params.get("entity", "").strip()
@@ -417,7 +418,7 @@ class AuditLogDetailView(APIView):
 class AuditLogLatestView(APIView):
     """Últimas acções de utilizadores (para dashboard/overview). limit 50 por defeito."""
 
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [CanViewAuditLogs]
 
     def get(self, request):
         user_id = request.query_params.get("user")

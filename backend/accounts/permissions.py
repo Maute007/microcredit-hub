@@ -44,7 +44,22 @@ class RoleAwareDjangoModelPermissions(permissions.DjangoModelPermissions):
             return True
 
         queryset = self._queryset(view)
-        perms = self.get_required_permissions(request.method, queryset.model)
+        model = queryset.model
+        app = model._meta.app_label
+        model_name = model._meta.model_name
+
+        # Para abrir/listar um módulo no UI, aceitar qualquer permissão do recurso.
+        # (view/add/change/delete_<model>)
+        if request.method in permissions.SAFE_METHODS:
+            any_read_like = (
+                f"{app}.view_{model_name}",
+                f"{app}.add_{model_name}",
+                f"{app}.change_{model_name}",
+                f"{app}.delete_{model_name}",
+            )
+            return any(user_has_permission(user, perm) for perm in any_read_like)
+
+        perms = self.get_required_permissions(request.method, model)
         return all(user_has_permission(user, perm) for perm in perms)
 
 
@@ -76,3 +91,17 @@ class CanPatchSystemSettings(permissions.BasePermission):
         if not u or not u.is_authenticated:
             return False
         return user_has_permission(u, "accounts.change_systemsettings")
+
+
+class CanViewAuditLogs(permissions.BasePermission):
+    """
+    Acesso à auditoria com base em permissões reais do utilizador.
+
+    Superuser entra sempre; restantes precisam de acesso de gestão de utilizadores.
+    """
+
+    def has_permission(self, request, view):
+        u = request.user
+        if not u or not u.is_authenticated:
+            return False
+        return user_has_permission(u, "accounts.view_user")

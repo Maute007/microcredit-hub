@@ -285,13 +285,6 @@ class PaymentSerializer(serializers.ModelSerializer):
             if amount is not None and amount > 0 and installment_number is not None:
                 from datetime import date
                 exclude_id = self.instance.id if (self.instance and self.instance.status == "pago") else None
-                min_payment = compute_min_payment_for_installment(
-                    loan, installment_number, exclude_payment_id=exclude_id
-                )
-                if amount < min_payment:
-                    raise serializers.ValidationError(
-                        {"amount": f"O valor mínimo para esta parcela é {min_payment} MT."}
-                    )
                 remaining = compute_remaining_balance(loan, exclude_payment_id=exclude_id)
                 max_allowed = remaining
                 if loan.end_date < date.today():
