@@ -7,7 +7,7 @@ from validators import MAX_PAGE_SIZE
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
-from accounts.permissions import RoleAwareDjangoModelPermissions
+from accounts.permissions import RoleAwareDjangoModelPermissions, user_has_permission
 
 from .models import AttendanceRecord, Employee, HRSettings, PayrollAdjustment, SalarySlip, Vacation
 from .serializers import (
@@ -155,6 +155,17 @@ class HRSettingsViewSet(ModelViewSet):
     serializer_class = HRSettingsSerializer
     permission_classes = [RoleAwareDjangoModelPermissions]
     pagination_class = None
+
+    def get_permissions(self):
+        # O frontend salva definições por POST em /hr-settings/ (singleton).
+        # Tratar esse POST como "alteração" para não exigir add_hrsettings.
+        if self.request.method == "POST":
+            class _CanChangeHRSettings(permissions.BasePermission):
+                def has_permission(self, request, view):
+                    return user_has_permission(request.user, "hr.change_hrsettings")
+
+            return [_CanChangeHRSettings()]
+        return [RoleAwareDjangoModelPermissions()]
 
     def get_queryset(self):
         return HRSettings.objects.all()
