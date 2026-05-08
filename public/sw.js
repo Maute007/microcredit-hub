@@ -1,6 +1,6 @@
 // Cache apenas assets estáticos do próprio domínio.
 // NUNCA cachear API/auth — isso causa "default" intermitente e configs antigas.
-const CACHE_NAME = "microcredit-hub-v3";
+const CACHE_NAME = "microcredit-hub-v4";
 const CORE_ASSETS = ["/", "/manifest.webmanifest", "/favicon.png"];
 
 self.addEventListener("install", (event) => {
