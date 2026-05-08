@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { QueryErrorAlert } from "@/components/QueryErrorAlert";
 import { DataTable } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
 import { PaymentStatusCell } from "@/components/PaymentStatusCell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -595,6 +596,13 @@ export default function PaymentsPage() {
         searchKeys={["client_name", "loan", "method"]}
         loading={isLoading}
         pageSize={10}
+        emptyState={
+          <EmptyState
+            icon={HandCoins}
+            title="Nenhum pagamento registado"
+            description="Os pagamentos aparecem automaticamente quando empréstimos têm parcelas vencidas ou liquidadas."
+          />
+        }
         getRowClassName={(p) =>
           (p as ApiPayment).status === "atrasado"
             ? "bg-red-50/95 dark:bg-red-950/50 border-l-4 border-l-red-500 text-red-900 dark:text-red-100 [&_td]:font-medium hover:bg-red-100/90 dark:hover:bg-red-950/60"

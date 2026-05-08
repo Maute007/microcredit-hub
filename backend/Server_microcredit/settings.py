@@ -245,6 +245,11 @@ REST_FRAMEWORK = {
     },
 }
 
+# Em desenvolvimento, throttling atrapalha a UX (React Query faz várias queries ao montar).
+# Mantemos throttling apenas fora do DEBUG.
+if DEBUG:
+    REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = []
+
 SPECTACULAR_SETTINGS = {
     "TITLE": "MicroCrédito Hub API",
     "DESCRIPTION": "API para gestão de microcrédito: clientes, empréstimos, pagamentos, RH e contabilidade.",

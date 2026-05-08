@@ -7,7 +7,39 @@ let sessionExpired = false;
 /** Um único refresh em voo para vários 401 simultâneos (access expirado). */
 let refreshInFlight: Promise<boolean> | null = null;
 
-function scheduleRefreshAttempt(): Promise<boolean> {
+type RefreshResult = "ok" | "invalid" | "error";
+
+let refreshInFlightV2: Promise<RefreshResult> | null = null;
+
+function scheduleRefreshAttempt(): Promise<RefreshResult> {
+  // Mantém compatibilidade: substitui a antiga lógica booleana por um resultado mais robusto.
+  if (!refreshInFlightV2) {
+    refreshInFlightV2 = (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/auth/refresh/`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (res.ok) return "ok";
+        // Se o refresh foi negado, é porque o refresh token/cookie já não é válido.
+        if (res.status === 401 || res.status === 403) return "invalid";
+        // Outras falhas (5xx, etc.) não devem matar a sessão de imediato.
+        return "error";
+      } catch {
+        return "error";
+      }
+    })();
+    void refreshInFlightV2.finally(() => {
+      refreshInFlightV2 = null;
+    });
+  }
+  return refreshInFlightV2;
+}
+
+// (Legacy) Mantido apenas para não quebrar imports/uso antigo, se existir.
+// Preferir `scheduleRefreshAttempt()` (v2) acima.
+function scheduleRefreshAttemptLegacy(): Promise<boolean> {
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       const res = await fetch(`${API_BASE}/auth/refresh/`, {
@@ -28,7 +60,8 @@ function isAuthRecoveryPath(path: string): boolean {
   return (
     path.includes("/auth/login") ||
     path.includes("/auth/refresh") ||
-    path.includes("/auth/me")
+    path.includes("/auth/me") ||
+    path.includes("/auth/logout")
   );
 }
 
@@ -104,10 +137,15 @@ async function fetchApi<T>(
         !path.includes("/auth/logout");
 
       if (canTryRefresh) {
-        const refreshed = await scheduleRefreshAttempt();
-        if (refreshed) {
+        const refreshResult = await scheduleRefreshAttempt();
+        if (refreshResult === "ok") {
           sessionExpired = false;
           return fetchApi<T>(path, options, true);
+        }
+        if (refreshResult === "error") {
+          // Não matar sessão em falha temporária (rede/backend instável).
+          // Deixa o utilizador logado e permite nova tentativa no próximo request/visibility refresh.
+          throw new ApiError("Não foi possível renovar a sessão. Tente novamente.", 0, data);
         }
       }
 
@@ -246,6 +284,8 @@ export interface ApiSystemSettings {
   login_description?: string;
   login_banner_color?: string;
   login_card_color?: string;
+  login_banner_kicker?: string;
+  login_banner_image_url?: string;
   login_banner_title?: string;
   login_banner_subtitle?: string;
   login_banner_body?: string;
@@ -261,16 +301,53 @@ export interface ApiSystemSettings {
   login_body_font_size?: string;
   login_body_color?: string;
   login_show_feature_boxes?: boolean;
+  calendar_type_labels?: Record<string, string>;
+  loan_default_interest_rate?: number;
+  loan_allowed_terms_days?: number[];
+  creditor_legal_name?: string;
+  creditor_address?: string;
+  creditor_city?: string;
+  // BdM Report fields
+  bom_province?: string;
+  bom_phone?: string;
+  bom_fax?: string;
+  bom_email?: string;
+  bom_num_workers?: number;
+  bom_start_date?: string;
+  bom_operator_name?: string;
+  bom_initial_capital?: number;
+  bom_current_capital?: number;
+  bom_own_capital?: number;
+  bom_foreign_capital_national?: number;
+  bom_foreign_capital_foreign?: number;
+  bom_financing_loans?: number;
+  bom_financing_donations?: number;
+  bom_financing_capital_increase?: number;
+  bom_financial_situation?: Array<{ caixa: number; bancos: number; outros_activos: number }>;
+  contract_theme_color?: string;
+  contract_page_bg_color?: string;
+  contract_logo_url?: string;
+  /** URL absoluta do ficheiro carregado no servidor (prioridade sobre `contract_logo_url`). */
+  contract_logo_upload_url?: string | null;
+  contract_header_title?: string;
+  contract_header_subtitle?: string;
+  contract_doc_badge?: string;
+  /** Texto legal fixo da instituição (secção 03 da folha); distinto dos T&C da categoria do empréstimo. */
+  contract_general_clauses?: string;
+  /** Se falso, a folha omite o bloco institucional (cláusulas gerais / lista padrão); T&C da categoria mantêm-se. */
+  contract_include_clauses_on_sheet?: boolean;
   updated_at: string;
   is_locked: boolean;
   locked_message: string;
 }
 
 export const systemApi = {
-  // Usado na LoginPage: fetch direto sem cookies nem handler de 401,
-  // para não disparar "sessão expirada" antes do utilizador fazer login.
+  // Usado na LoginPage e ThemeProvider: fetch direto sem cookies nem handler de 401.
+  // `credentials: "omit"` é crítico — sem isto, cookies expirados (access JWT antigo) seriam
+  // enviados, fazendo a JWTAuthentication rejeitar com 401 ANTES de o AllowAny ser avaliado.
+  // O endpoint backend permite GET público; isto garante que de facto o tratamos como público.
   getPublic: () =>
-    fetch(`${API_BASE}/auth/settings/`)
+    fetch(`${API_BASE}/auth/settings/`, { credentials: "omit" })
       .then((r) => (r.ok ? (r.json() as Promise<ApiSystemSettings>) : Promise.resolve(null)))
       .catch(() => null),
   get: () => fetchApi<ApiSystemSettings>("/auth/settings/"),
@@ -285,6 +362,8 @@ export const systemApi = {
         | "login_description"
         | "login_banner_color"
         | "login_card_color"
+        | "login_banner_kicker"
+        | "login_banner_image_url"
         | "login_banner_title"
         | "login_banner_subtitle"
         | "login_banner_body"
@@ -300,12 +379,38 @@ export const systemApi = {
         | "login_body_font_size"
         | "login_body_color"
         | "login_show_feature_boxes"
+        | "calendar_type_labels"
+        | "loan_default_interest_rate"
+        | "loan_allowed_terms_days"
+        | "creditor_legal_name"
+        | "creditor_address"
+        | "creditor_city"
+        | "contract_theme_color"
+        | "contract_page_bg_color"
+        | "contract_logo_url"
+        | "contract_header_title"
+        | "contract_header_subtitle"
+        | "contract_doc_badge"
+        | "contract_general_clauses"
+        | "contract_include_clauses_on_sheet"
       >
     >,
   ) =>
     fetchApi<ApiSystemSettings>("/auth/settings/", {
       method: "PATCH",
       body: JSON.stringify(payload),
+    }),
+  uploadContractLogo: (file: File) => {
+    const fd = new FormData();
+    fd.append("logo", file);
+    return fetchApi<{ contract_logo_upload_url: string }>("/auth/settings/contract-logo/", {
+      method: "POST",
+      body: fd,
+    });
+  },
+  deleteContractLogoUpload: () =>
+    fetchApi<void>("/auth/settings/contract-logo/", {
+      method: "DELETE",
     }),
 };
 
@@ -416,6 +521,7 @@ export interface ApiClient {
   address: string;
   city: string;
   occupation: string;
+  gender?: "M" | "F" | "O" | "";
   status: "ativo" | "inativo";
   created_at: string;
   total_loans: number;
@@ -450,12 +556,23 @@ export interface ApiLoan {
   monthly_payment: number;
   total_amount: number;
   status: "ativo" | "pago" | "atrasado" | "pendente";
+  sector?: "comercio" | "agricultura" | "pecuaria" | "industria" | "servicos" | "consumo" | "outros" | "";
   start_date: string;
   end_date: string;
   paid_amount: number;
   remaining_balance: number;
   paid_installments: number;
   collateral?: ApiCollateral | null;
+}
+
+export interface ApiLoanContractProof {
+  id: string;
+  loan: number;
+  contract_sha256: string;
+  signature_sha256: string;
+  rubrica_sha256: string;
+  server_hmac_sha256: string;
+  created_at: string;
 }
 
 export interface ApiPayment {
@@ -492,6 +609,7 @@ export const clientsApi = {
     const res = await fetchApi<PaginatedResponse<ApiClient>>("/clients/");
     return res.results;
   },
+  get: (id: number) => fetchApi<ApiClient>(`/clients/${id}/`),
   create: (payload: {
     name: string;
     email?: string;
@@ -584,6 +702,16 @@ export const loansApi = {
     }),
   delete: (id: number) =>
     fetchApi<void>(`/loans/${id}/`, { method: "DELETE" }),
+  createContractProof: (
+    loanId: number,
+    payload: { contract_text: string; signature_data_url?: string; rubrica_data_url?: string },
+  ) =>
+    fetchApi<ApiLoanContractProof>(`/loans/${loanId}/contract-proof/`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  lookupContractProof: (q: string) =>
+    fetchApi<{ results: ApiLoanContractProof[] }>(`/loans/contract-proof/?q=${encodeURIComponent(q)}`),
 };
 
 export interface ApiLoanCategory {
@@ -1189,3 +1317,47 @@ export const accountingApi = {
       body: JSON.stringify(payload),
     }),
 };
+
+// --- Reports ---
+
+export const reportsApi = {
+  /**
+   * Download the BdM Ficha de Reporte Trimestral as an Excel file.
+   * Uses fetch with credentials (httpOnly cookie) and triggers a blob download.
+   */
+  bomExport: async (params: { date_from: string; date_to: string; period_label: string }): Promise<void> => {
+    const url = new URL(`${API_BASE}/reports/bom-export/`);
+    url.searchParams.set("date_from", params.date_from);
+    url.searchParams.set("date_to", params.date_to);
+    url.searchParams.set("period_label", params.period_label);
+
+    const res = await fetch(url.toString(), { credentials: "include" });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new ApiError(`Erro ao exportar relatório BdM: ${res.statusText}`, res.status, text);
+    }
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    // Extract filename from Content-Disposition or use default
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    const match = disposition.match(/filename="([^"]+)"/);
+    a.download = match ? match[1] : `reporte_bom_${params.date_from.slice(0, 7).replace("-", "_")}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(objectUrl);
+  },
+};
+
+export const parMetricsApi = {
+  get: (): Promise<{
+    total_portfolio: number;
+    total_active_loans: number;
+    par30: { amount: number; count: number; ratio: number };
+    par60: { amount: number; count: number; ratio: number };
+    par90: { amount: number; count: number; ratio: number };
+    due_this_week: { amount: number; count: number };
+    overdue: { amount: number; count: number };
+  }> => apiFetch("/reports/par-metrics/"),
+};
+

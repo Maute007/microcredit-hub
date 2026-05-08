@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 from simple_history.models import HistoricalRecords
+import uuid
 
 
 class LoanCategory(models.Model):
@@ -151,6 +152,16 @@ class Loan(models.Model):
         ("pendente", _("Pendente")),
     ]
 
+    SECTOR_CHOICES = [
+        ("comercio", _("Comércio")),
+        ("agricultura", _("Agricultura")),
+        ("pecuaria", _("Pecuária")),
+        ("industria", _("Indústria")),
+        ("servicos", _("Serviços")),
+        ("consumo", _("Consumo")),
+        ("outros", _("Outros")),
+    ]
+
     client = models.ForeignKey(
         "clients.Client",
         on_delete=models.CASCADE,
@@ -182,6 +193,13 @@ class Loan(models.Model):
         choices=STATUS_CHOICES,
         default="pendente",
         verbose_name=_("Estado"),
+    )
+    sector = models.CharField(
+        max_length=20,
+        choices=SECTOR_CHOICES,
+        default="outros",
+        blank=True,
+        verbose_name=_("Sector de Actividade"),
     )
     start_date = models.DateField(verbose_name=_("Data início"))
     end_date = models.DateField(verbose_name=_("Data fim"))
@@ -282,6 +300,43 @@ class Collateral(models.Model):
 
     def __str__(self):
         return f"{self.get_item_type_display()}: {self.description[:50]}"
+
+
+class LoanContractProof(models.Model):
+    """Prova de integridade do contrato (hash + assinatura do servidor)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    loan = models.ForeignKey(
+        Loan,
+        on_delete=models.CASCADE,
+        related_name="contract_proofs",
+        verbose_name=_("Empréstimo"),
+    )
+    contract_sha256 = models.CharField(max_length=64, db_index=True, verbose_name=_("SHA256 do contrato"))
+    signature_sha256 = models.CharField(max_length=64, blank=True, verbose_name=_("SHA256 da assinatura"))
+    rubrica_sha256 = models.CharField(max_length=64, blank=True, verbose_name=_("SHA256 da rubrica"))
+    server_hmac_sha256 = models.CharField(max_length=64, db_index=True, verbose_name=_("HMAC do servidor (SHA256)"))
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_contract_proofs",
+        verbose_name=_("Criado por"),
+    )
+
+    class Meta:
+        verbose_name = _("Prova de contrato")
+        verbose_name_plural = _("Provas de contrato")
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["loan", "created_at"]),
+            models.Index(fields=["contract_sha256"]),
+        ]
+
+    def __str__(self):
+        return f"{self.loan_id} · {self.contract_sha256[:12]}…"
 
 
 class Payment(models.Model):

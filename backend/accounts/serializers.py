@@ -314,6 +314,8 @@ class UserMeSerializer(serializers.ModelSerializer):
 
 
 class SystemSettingsSerializer(serializers.ModelSerializer):
+    contract_logo_upload_url = serializers.SerializerMethodField()
+
     class Meta:
         model = SystemSettings
         fields = [
@@ -325,6 +327,8 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             "login_description",
             "login_banner_color",
             "login_card_color",
+            "login_banner_kicker",
+            "login_banner_image_url",
             "login_banner_title",
             "login_banner_subtitle",
             "login_banner_body",
@@ -340,8 +344,48 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             "login_body_font_size",
             "login_body_color",
             "login_show_feature_boxes",
+            "calendar_type_labels",
+            "loan_default_interest_rate",
+            "loan_allowed_terms_days",
+            "creditor_legal_name",
+            "creditor_address",
+            "creditor_city",
+            "bom_province",
+            "bom_phone",
+            "bom_fax",
+            "bom_email",
+            "bom_num_workers",
+            "bom_start_date",
+            "bom_operator_name",
+            "bom_initial_capital",
+            "bom_current_capital",
+            "bom_own_capital",
+            "bom_foreign_capital_national",
+            "bom_foreign_capital_foreign",
+            "bom_financing_loans",
+            "bom_financing_donations",
+            "bom_financing_capital_increase",
+            "bom_financial_situation",
+            "contract_theme_color",
+            "contract_page_bg_color",
+            "contract_logo_url",
+            "contract_logo_upload_url",
+            "contract_header_title",
+            "contract_header_subtitle",
+            "contract_doc_badge",
+            "contract_general_clauses",
+            "contract_include_clauses_on_sheet",
             "is_locked",
             "locked_message",
             "updated_at",
         ]
-        read_only_fields = ["id", "updated_at"]
+        read_only_fields = ["id", "updated_at", "contract_logo_upload_url"]
+
+    def get_contract_logo_upload_url(self, obj):
+        if not getattr(obj, "contract_logo", None) or not obj.contract_logo:
+            return None
+        request = self.context.get("request")
+        rel = obj.contract_logo.url
+        if request is not None:
+            return request.build_absolute_uri(rel)
+        return rel

@@ -4,6 +4,7 @@ from django.http import Http404
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -208,7 +209,7 @@ class SystemSettingsView(APIView):
 
     def get(self, request):
         settings_obj = SystemSettings.get_solo()
-        return Response(SystemSettingsSerializer(settings_obj).data)
+        return Response(SystemSettingsSerializer(settings_obj, context={"request": request}).data)
 
     def patch(self, request):
         settings_obj = SystemSettings.get_solo()
@@ -217,10 +218,49 @@ class SystemSettingsView(APIView):
         if not request.user.is_superuser:
             data.pop("is_locked", None)
             data.pop("locked_message", None)
-        serializer = SystemSettingsSerializer(settings_obj, data=data, partial=True)
+        serializer = SystemSettingsSerializer(settings_obj, data=data, partial=True, context={"request": request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(serializer.data)
+        return Response(SystemSettingsSerializer(settings_obj, context={"request": request}).data)
+
+
+class ContractLogoUploadView(APIView):
+    """Upload do logo do contrato (multipart). GET público das settings já devolve URL absoluta."""
+
+    permission_classes = [permissions.IsAuthenticated, CanPatchSystemSettings]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        upload = request.FILES.get("logo") or request.FILES.get("file")
+        if not upload:
+            return Response({"detail": "Ficheiro em falta (use o campo logo)."}, status=status.HTTP_400_BAD_REQUEST)
+        if upload.size > 5 * 1024 * 1024:
+            return Response({"detail": "Ficheiro demasiado grande (máx. 5MB)."}, status=status.HTTP_400_BAD_REQUEST)
+        ctype = (upload.content_type or "").lower()
+        if not ctype.startswith("image/"):
+            return Response({"detail": "Apenas imagens são permitidas."}, status=status.HTTP_400_BAD_REQUEST)
+
+        settings_obj = SystemSettings.get_solo()
+        if settings_obj.contract_logo:
+            try:
+                settings_obj.contract_logo.delete(save=False)
+            except Exception:
+                pass
+        settings_obj.contract_logo = upload
+        settings_obj.save(update_fields=["contract_logo", "updated_at"])
+        url = request.build_absolute_uri(settings_obj.contract_logo.url)
+        return Response({"contract_logo_upload_url": url}, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        settings_obj = SystemSettings.get_solo()
+        if settings_obj.contract_logo:
+            try:
+                settings_obj.contract_logo.delete(save=False)
+            except Exception:
+                pass
+            settings_obj.contract_logo = None
+            settings_obj.save(update_fields=["contract_logo", "updated_at"])
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class DebugPermissionsView(APIView):

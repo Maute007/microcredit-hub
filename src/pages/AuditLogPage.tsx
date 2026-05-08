@@ -35,6 +35,8 @@ import {
   type ApiUser,
 } from "@/lib/api";
 import { formatDateTime } from "@/data/mockData";
+import type { ExportColumn } from "@/lib/exporters";
+import { useToast } from "@/hooks/use-toast";
 import {
   Loader2,
   Download,
@@ -248,67 +250,115 @@ export default function AuditLogPage() {
     setOffset(0);
   };
 
+  const { toast } = useToast();
+
+  const auditExportColumns: ExportColumn<ApiAuditEntry>[] = useMemo(() => {
+    const actionLabel: Record<string, string> = { "+": "Criado", "~": "Alterado", "-": "Eliminado" };
+    return [
+      { header: "Data/Hora", accessor: (r) => r.changed_at ? formatDateTime(r.changed_at) : "", width: 18 },
+      { header: "Utilizador", accessor: (r) => r.user_name || r.user_username || "—", width: 22 },
+      { header: "Acção", accessor: (r) => actionLabel[r.action] ?? r.action, width: 12 },
+      { header: "Entidade", accessor: (r) => r.entity || "", width: 18 },
+      { header: "ID Objecto", accessor: (r) => r.object_id ?? "", width: 12, align: "right" },
+      { header: "Motivo", accessor: (r) => r.change_reason || "", width: 30 },
+    ];
+  }, []);
+
+  const auditPeriodSubtitle = (() => {
+    if (dateFrom && dateTo) return `Período: ${dateFrom} — ${dateTo}`;
+    if (dateFrom) return `Desde ${dateFrom}`;
+    if (dateTo) return `Até ${dateTo}`;
+    return "Todos os registos visíveis";
+  })();
+
+  const auditMetaSummary = [
+    { label: "Total geral", value: total.toLocaleString("pt-MZ") },
+    { label: "Criados", value: createdCount.toString() },
+    { label: "Alterados", value: updatedCount.toString() },
+    { label: "Eliminados", value: deletedCount.toString() },
+  ];
+
+  const handleExportExcel = async () => {
+    if (results.length === 0) {
+      toast({ title: "Sem registos", description: "Não há acções para exportar.", variant: "destructive" });
+      return;
+    }
+    const { exportToExcel } = await import("@/lib/exporters");
+    exportToExcel(results, auditExportColumns, {
+      title: "Histórico de Acções",
+      subtitle: auditPeriodSubtitle,
+      brand: "MAKIRA · Microcredit Hub",
+      summary: auditMetaSummary,
+    });
+    toast({ title: "Excel exportado", description: `${results.length} acção(ões) gravadas.` });
+  };
+
+  const handleExportPdf = async () => {
+    if (results.length === 0) {
+      toast({ title: "Sem registos", description: "Não há acções para exportar.", variant: "destructive" });
+      return;
+    }
+    const { exportToPdf } = await import("@/lib/exporters");
+    exportToPdf(results, auditExportColumns, {
+      title: "Histórico de Acções",
+      subtitle: auditPeriodSubtitle,
+      brand: "MAKIRA · Microcredit Hub",
+      summary: auditMetaSummary,
+    }, { orientation: "landscape" });
+    toast({ title: "PDF exportado", description: `${results.length} acção(ões) no documento.` });
+  };
+
   return (
     <div className="space-y-6 min-h-screen">
       {isError && <QueryErrorAlert onRetry={() => refetch()} />}
 
-      {/* Hero header */}
-      <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-slate-50 via-white to-primary/5 dark:from-slate-950 dark:via-slate-900 dark:to-primary/10 p-8 sm:p-10 shadow-lg">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-        <div className="relative">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-            <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-4 py-1.5 text-sm font-medium text-primary">
-                <ShieldCheck className="h-4 w-4" />
-                Auditoria e conformidade
-              </div>
-              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-                Histórico de acções
-              </h1>
-              <p className="text-muted-foreground max-w-2xl text-base leading-relaxed">
-                Rastreie todas as alterações no sistema em tempo real. Veja quem fez o quê,
-                quando e porquê. Exporte relatórios para auditoria e conformidade.
-              </p>
-              <div className="flex flex-wrap gap-3 pt-2">
-                <a
-                  href={exportUrl}
-                  download="auditoria.csv"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Button
-                    size="lg"
-                    className="gap-2 shadow-md hover:shadow-lg transition-shadow"
-                  >
-                    <Download className="h-4 w-4" />
-                    Exportar CSV
-                  </Button>
-                </a>
-                <Button
-                  variant="outline"
-                  size="lg"
-                  onClick={() => setShowFilters((s) => !s)}
-                  className="gap-2"
-                >
-                  <Filter className="h-4 w-4" />
-                  {showFilters ? "Ocultar" : "Mostrar"} filtros
+      {/* Hero compacto */}
+      <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-card via-card to-primary/5 dark:to-primary/10 p-5 sm:p-6 shadow-sm">
+        <div aria-hidden className="absolute -top-24 -right-24 w-72 h-72 bg-primary/8 rounded-full blur-3xl pointer-events-none" />
+        <div aria-hidden className="absolute -bottom-32 -left-16 w-72 h-72 bg-accent/8 rounded-full blur-3xl pointer-events-none" />
+        <div className="relative flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[11px] font-medium text-primary mb-2">
+              <ShieldCheck className="h-3 w-3" />
+              Auditoria e conformidade
+            </div>
+            <h1 className="text-2xl font-bold tracking-tight">Histórico de acções</h1>
+            <p className="text-sm text-muted-foreground mt-0.5 max-w-2xl">
+              Rastreie todas as alterações no sistema. Quem fez o quê, quando e porquê.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-4">
+              <Button size="sm" onClick={handleExportExcel} disabled={isLoading} className="gap-1.5">
+                <Download className="h-3.5 w-3.5" />
+                Excel
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleExportPdf} disabled={isLoading} className="gap-1.5">
+                <FileText className="h-3.5 w-3.5" />
+                PDF
+              </Button>
+              <a href={exportUrl} download="auditoria.csv" target="_blank" rel="noopener noreferrer">
+                <Button size="sm" variant="outline" className="gap-1.5">
+                  <Download className="h-3.5 w-3.5" />
+                  CSV
                 </Button>
-              </div>
+              </a>
+              <Button size="sm" variant="ghost" onClick={() => setShowFilters((s) => !s)} className="gap-1.5">
+                <Filter className="h-3.5 w-3.5" />
+                {showFilters ? "Ocultar filtros" : "Filtros"}
+              </Button>
             </div>
-            <div className="flex gap-3 lg:flex-col">
-              <StatPill
-                icon={Activity}
-                label="Registos"
-                value={total.toLocaleString("pt-MZ")}
-                sub={hasFilters ? "com filtros" : undefined}
-              />
-              <StatPill
-                icon={Users}
-                label="Utilizadores"
-                value={users.length.toString()}
-              />
-            </div>
+          </div>
+          <div className="flex gap-2 lg:flex-col shrink-0">
+            <StatPill
+              icon={Activity}
+              label="Registos"
+              value={total.toLocaleString("pt-MZ")}
+              sub={hasFilters ? "com filtros" : undefined}
+            />
+            <StatPill
+              icon={Users}
+              label="Utilizadores"
+              value={users.length.toString()}
+            />
           </div>
         </div>
       </div>

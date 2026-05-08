@@ -51,6 +51,7 @@ import { isNationalHoliday, isWeekend, getHolidaysInMonth, WEEKDAY_CELL_STYLES }
 import { formatCurrency, formatDate } from "@/data/mockData";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { systemApi, type ApiSystemSettings } from "@/lib/api";
 
 const monthNames = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -87,7 +88,7 @@ function getFirstDayOfMonth(y: number, m: number) {
   return new Date(y, m, 1).getDay();
 }
 
-const typeConfig: Record<
+const DEFAULT_TYPE_CONFIG: Record<
   string,
   { icon: typeof CreditCard; bg: string; dot: string; label: string }
 > = {
@@ -148,7 +149,7 @@ function getEventStyle(e: ApiCalendarEvent): { bg: string; dot: string } {
       dot: "",
     };
   }
-  const cfg = typeConfig[e.type] || typeConfig.other;
+  const cfg = DEFAULT_TYPE_CONFIG[e.type] || DEFAULT_TYPE_CONFIG.other;
   return { bg: cfg.bg, dot: cfg.dot };
 }
 
@@ -183,6 +184,20 @@ export default function CalendarPage() {
     queryFn: () => calendarApi.events({ year, month: month + 1 }),
     placeholderData: (prev) => prev,
   });
+
+  // Reaproveita cache do sistema (já é carregado no ProtectedRoute).
+  const { data: systemSettings } = useQuery<ApiSystemSettings>({
+    queryKey: ["system-settings"],
+    queryFn: systemApi.get,
+  });
+
+  const calendarLabels = systemSettings?.calendar_type_labels ?? {};
+  const typeConfig = Object.fromEntries(
+    Object.entries(DEFAULT_TYPE_CONFIG).map(([k, cfg]) => [
+      k,
+      { ...cfg, label: (calendarLabels[k] ?? "").trim() || cfg.label },
+    ]),
+  ) as typeof DEFAULT_TYPE_CONFIG;
 
   const events: ApiCalendarEvent[] = data?.events ?? [];
 
@@ -228,10 +243,11 @@ export default function CalendarPage() {
                   <DialogHeader>
                     <DialogTitle>Novo evento</DialogTitle>
                   </DialogHeader>
-                  <NewEventForm
+                    <NewEventForm
                     year={year}
                     month={month}
                     initialDate={newEventDate ?? undefined}
+                      typeConfig={typeConfig}
                     onSuccess={() => {
                       setShowNewEvent(false);
                       setNewEventDate(null);
@@ -612,11 +628,13 @@ function NewEventForm({
   month,
   initialDate,
   onSuccess,
+  typeConfig,
 }: {
   year: number;
   month: number;
   initialDate?: string;
   onSuccess: () => void;
+  typeConfig: Record<string, { label: string }>;
 }) {
   const defaultDate = initialDate ?? `${year}-${String(month + 1).padStart(2, "0")}-15`;
   const [title, setTitle] = useState("");
@@ -673,10 +691,9 @@ function NewEventForm({
             <SelectValue placeholder="Selecionar tipo" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="meeting">Reunião</SelectItem>
-            <SelectItem value="alert">Alerta</SelectItem>
-            <SelectItem value="reminder">Lembrete</SelectItem>
-            <SelectItem value="other">Outro</SelectItem>
+            {Object.entries(typeConfig).map(([key, cfg]) => (
+              <SelectItem key={key} value={key}>{cfg.label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
         {eventType === "other" && (

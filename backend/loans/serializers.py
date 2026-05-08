@@ -3,6 +3,8 @@ from decimal import Decimal
 from django.db.models import Sum
 from rest_framework import serializers
 
+from accounts.models import SystemSettings
+
 from validators import (
     MAX_COLLATERAL_VALUE,
     MAX_INSTALLMENT_NUMBER,
@@ -11,7 +13,7 @@ from validators import (
     MAX_PAYMENT_AMOUNT,
 )
 
-from .models import Collateral, Loan, LoanCategory, Payment
+from .models import Collateral, Loan, LoanCategory, Payment, LoanContractProof
 from .services import (
     compute_min_payment_for_installment,
     compute_remaining_balance,
@@ -162,6 +164,7 @@ class LoanSerializer(serializers.ModelSerializer):
             "monthly_payment",
             "total_amount",
             "status",
+            "sector",
             "start_date",
             "end_date",
             "paid_amount",
@@ -204,10 +207,28 @@ class LoanSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
+        # Defaults simples (raramente mudam): juros padrão e prazos comuns vêm das SystemSettings.
+        sys = SystemSettings.get_solo()
+        allowed_terms_days = getattr(sys, "loan_allowed_terms_days", None) or []
+        try:
+            allowed_terms_days = [int(x) for x in allowed_terms_days if int(x) > 0]
+        except Exception:
+            allowed_terms_days = []
+
         amount = data.get("amount") or (self.instance and self.instance.amount)
-        interest_rate = (data.get("interest_rate") is not None and data.get("interest_rate")) or (
-            self.instance and self.instance.interest_rate
-        ) or Decimal("0")
+        # Se não veio interest_rate no payload (create), aplicar default da categoria ou do sistema.
+        if "interest_rate" in data:
+            interest_rate = data.get("interest_rate")
+        elif self.instance is not None:
+            interest_rate = self.instance.interest_rate
+        else:
+            cat = data.get("category")
+            if cat is not None and getattr(cat, "default_interest_rate", None) is not None:
+                interest_rate = getattr(cat, "default_interest_rate")
+            else:
+                interest_rate = getattr(sys, "loan_default_interest_rate", Decimal("0")) or Decimal("0")
+
+        interest_rate = interest_rate or Decimal("0")
         term = data.get("term") or (self.instance and self.instance.term)
 
         # Garantir que end_date é posterior a start_date usando objetos date já convertidos
@@ -215,6 +236,25 @@ class LoanSerializer(serializers.ModelSerializer):
         end_date = data.get("end_date") or getattr(self.instance, "end_date", None)
         if start_date and end_date and end_date < start_date:
             raise serializers.ValidationError({"end_date": "Data fim deve ser posterior à data início."})
+
+        # Validação simples de prazo: nós tratamos `term` como número de parcelas/mês, mas UX fala em dias (30/60/90/120).
+        # Aqui convertimos para "dias aproximados" por \( term * 30 \).
+        if term:
+            term_months = int(term)
+            term_days = term_months * 30
+            if allowed_terms_days and term_days not in allowed_terms_days and self.instance is None:
+                raise serializers.ValidationError(
+                    {"term": f"Prazo inválido. Prazos permitidos (dias): {', '.join(map(str, sorted(set(allowed_terms_days))))}."}
+                )
+
+            cat = data.get("category") or (self.instance and getattr(self.instance, "category", None))
+            if cat is not None:
+                min_td = int(getattr(cat, "min_term_days", 0) or 0)
+                max_td = int(getattr(cat, "max_term_days", 0) or 0)
+                if min_td and term_days < min_td:
+                    raise serializers.ValidationError({"term": f"Prazo abaixo do mínimo da categoria ({min_td} dias)."})
+                if max_td and term_days > max_td:
+                    raise serializers.ValidationError({"term": f"Prazo acima do máximo da categoria ({max_td} dias)."})
 
         if amount and term:
             principal = float(amount) / int(term)
@@ -244,6 +284,26 @@ class LoanSerializer(serializers.ModelSerializer):
             elif getattr(loan, "collateral", None):
                 loan.collateral.delete()
         return loan
+
+
+class LoanContractProofCreateSerializer(serializers.Serializer):
+    contract_text = serializers.CharField(allow_blank=False, trim_whitespace=False)
+    signature_data_url = serializers.CharField(required=False, allow_blank=True)
+    rubrica_data_url = serializers.CharField(required=False, allow_blank=True)
+
+
+class LoanContractProofSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LoanContractProof
+        fields = [
+            "id",
+            "loan",
+            "contract_sha256",
+            "signature_sha256",
+            "rubrica_sha256",
+            "server_hmac_sha256",
+            "created_at",
+        ]
 
 
 class PaymentSerializer(serializers.ModelSerializer):

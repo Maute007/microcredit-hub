@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQuery } from "@tanstack/react-query";
-import { systemApi, type ApiSystemSettings } from "@/lib/api";
+import { systemApi, loansApi, paymentsApi, type ApiSystemSettings, type ApiLoan, type ApiPayment } from "@/lib/api";
 import {
   LayoutDashboard,
   Users,
@@ -10,7 +10,6 @@ import {
   CreditCard,
   CalendarDays,
   UserCog,
-  BookOpen,
   FileBarChart,
   ChevronLeft,
   Menu,
@@ -19,10 +18,16 @@ import {
   Building2,
   History,
   Download,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { NotificationDropdown } from "@/components/NotificationDropdown";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+const SIDEBAR_COLLAPSED_KEY = "ui:sidebar-collapsed";
+const THEME_KEY = "ui:theme";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -41,6 +46,8 @@ const UTILIZADORES_ACCESS_PERMS = [
   "change_systemsettings",
 ] as const;
 
+type NavBadgeKey = "loans-late" | "payments-pending";
+
 const navItems: Array<{
   title: string;
   path: string;
@@ -50,22 +57,45 @@ const navItems: Array<{
   viewPermission?: string;
   /** Se definido, basta uma destas permissões (em vez de adminOnly ou viewPermission). */
   anyOfPermissions?: readonly string[];
+  /** Chave do badge a exibir (contagem dinâmica). */
+  badgeKey?: NavBadgeKey;
 }> = [
   { title: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
   { title: "Clientes", path: "/clientes", icon: Users, viewPermission: "view_client" },
-  { title: "Empréstimos", path: "/emprestimos", icon: Wallet, viewPermission: "view_loan" },
-  { title: "Pagamentos", path: "/pagamentos", icon: CreditCard, viewPermission: "view_payment" },
+  { title: "Empréstimos", path: "/emprestimos", icon: Wallet, viewPermission: "view_loan", badgeKey: "loans-late" },
+  { title: "Pagamentos", path: "/pagamentos", icon: CreditCard, viewPermission: "view_payment", badgeKey: "payments-pending" },
   { title: "Calendário", path: "/calendario", icon: CalendarDays, viewPermission: "view_calendarevent" },
   { title: "Recursos Humanos", path: "/rh", icon: UserCog, viewPermission: "view_employee" },
-  { title: "Contabilidade", path: "/contabilidade", icon: BookOpen, viewPermission: "view_transaction" },
   { title: "Relatórios", path: "/relatorios", icon: FileBarChart },
   { title: "Utilizadores & Acesso", path: "/utilizadores", icon: Building2, anyOfPermissions: UTILIZADORES_ACCESS_PERMS },
   { title: "Histórico de acções", path: "/auditoria", icon: History, viewPermission: "view_user" },
 ];
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1";
+  });
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+  }, [collapsed]);
+
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window === "undefined") return "light";
+    const stored = window.localStorage.getItem(THEME_KEY);
+    if (stored === "dark" || stored === "light") return stored;
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    window.localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const location = useLocation();
@@ -88,6 +118,42 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     queryKey: ["system-settings"],
     queryFn: systemApi.get,
   });
+
+  const perms = user?.permissions ?? [];
+  const hasViewPermission = (codename: string) =>
+    !user
+      ? false
+      : user.is_superuser ||
+        perms.includes("*") ||
+        perms.includes(codename) ||
+        perms.some((p) => p.endsWith(`.${codename}`));
+
+  const canViewLoans = hasViewPermission("view_loan");
+  const canViewPayments = hasViewPermission("view_payment");
+
+  const { data: badgeLoans = [] } = useQuery<ApiLoan[]>({
+    queryKey: ["sidebar-badge-loans"],
+    queryFn: () => loansApi.list({ page_size: 200 }),
+    enabled: canViewLoans,
+    staleTime: 60_000,
+  });
+  const { data: badgePayments = [] } = useQuery<ApiPayment[]>({
+    queryKey: ["sidebar-badge-payments"],
+    queryFn: () => paymentsApi.list(),
+    enabled: canViewPayments,
+    staleTime: 60_000,
+  });
+
+  const lateLoansCount = badgeLoans.filter((l) => l.status === "atrasado").length;
+  const pendingPaymentsCount = badgePayments.filter(
+    (p) => p.status === "pendente" || p.status === "atrasado",
+  ).length;
+
+  const getBadgeCount = (key?: NavBadgeKey): number => {
+    if (key === "loans-late") return lateLoansCount;
+    if (key === "payments-pending") return pendingPaymentsCount;
+    return 0;
+  };
   const vendorName = "MAKIRA";
   const brandName = systemSettings?.name || vendorName;
   const brandSubtitle =
@@ -107,15 +173,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     path === "/dashboard"
       ? location.pathname === "/dashboard"
       : location.pathname.startsWith(path);
-
-  const perms = user?.permissions ?? [];
-  const hasViewPermission = (codename: string) =>
-    !user
-      ? false
-      : user.is_superuser ||
-        perms.includes("*") ||
-        perms.includes(codename) ||
-        perms.some((p) => p.endsWith(`.${codename}`));
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
@@ -157,21 +214,48 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           })
           .map((item) => {
           const active = isActive(item.path);
+          const badgeCount = getBadgeCount(item.badgeKey);
+          const badgeTone = item.badgeKey === "loans-late" ? "destructive" : "warning";
           return (
             <Link
               key={item.path}
               to={item.path}
               onClick={() => setMobileOpen(false)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+              className={`relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                 active
                   ? "bg-sidebar-primary text-sidebar-primary-foreground font-medium shadow-sm"
                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               } ${collapsed ? "justify-center" : ""}`}
-              title={collapsed ? item.title : undefined}
+              title={collapsed ? `${item.title}${badgeCount > 0 ? ` (${badgeCount})` : ""}` : undefined}
               aria-current={active ? "page" : undefined}
             >
-              <item.icon className="h-[18px] w-[18px] shrink-0" />
-              {!collapsed && <span>{item.title}</span>}
+              <span className="relative shrink-0">
+                <item.icon className="h-[18px] w-[18px]" />
+                {collapsed && badgeCount > 0 && (
+                  <span
+                    className={`absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full text-[9px] font-bold flex items-center justify-center text-white ${
+                      badgeTone === "destructive" ? "bg-destructive" : "bg-warning"
+                    }`}
+                  >
+                    {badgeCount > 99 ? "99+" : badgeCount}
+                  </span>
+                )}
+              </span>
+              {!collapsed && (
+                <>
+                  <span className="flex-1">{item.title}</span>
+                  {badgeCount > 0 && (
+                    <span
+                      className={`min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold flex items-center justify-center text-white ${
+                        badgeTone === "destructive" ? "bg-destructive" : "bg-warning"
+                      }`}
+                      aria-label={`${badgeCount} ${item.badgeKey === "loans-late" ? "atrasados" : "pendentes"}`}
+                    >
+                      {badgeCount > 99 ? "99+" : badgeCount}
+                    </span>
+                  )}
+                </>
+              )}
             </Link>
           );
         })}
@@ -291,6 +375,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 Instalar app
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+              title={theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
+              aria-label="Alternar tema"
+            >
+              {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </Button>
             <NotificationDropdown />
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center lg:hidden">
               <span className="text-xs font-medium text-primary">{initials}</span>
@@ -300,6 +393,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Page content */}
         <main id="main-content" className="flex-1 overflow-y-auto p-4 lg:p-6" tabIndex={-1}>
+          <Breadcrumbs />
           {children}
         </main>
       </div>

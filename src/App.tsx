@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ApiAuthBridge } from "@/components/ApiAuthBridge";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { AppLayout } from "@/components/AppLayout";
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -14,10 +15,10 @@ import LoansPage from "./pages/LoansPage";
 import PaymentsPage from "./pages/PaymentsPage";
 import CalendarPage from "./pages/CalendarPage";
 import HRPage from "./pages/HRPage";
-import AccountingPage from "./pages/AccountingPage";
 import UsersPage from "./pages/UsersPage";
 import ReportsPage from "./pages/ReportsPage";
 import AuditLogPage from "./pages/AuditLogPage";
+import VerifyContractPage from "./pages/VerifyContractPage";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient({
@@ -30,6 +31,8 @@ const queryClient = new QueryClient({
       retry: (failureCount, error) => {
         const status = (error as { status?: number })?.status;
         if (status === 401) return false;
+        if (status === 429) return false;
+        if (status === 0) return false;
         return failureCount < 2;
       },
     },
@@ -40,6 +43,7 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <ApiAuthBridge />
+        <ThemeProvider>
         <TooltipProvider>
         <Toaster />
         <Sonner />
@@ -66,7 +70,7 @@ const App = () => (
             <Route
               path="/clientes"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="view_client">
                   <AppLayout>
                     <ClientsPage />
                   </AppLayout>
@@ -76,7 +80,7 @@ const App = () => (
             <Route
               path="/emprestimos"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="view_loan">
                   <AppLayout>
                     <LoansPage />
                   </AppLayout>
@@ -86,7 +90,7 @@ const App = () => (
             <Route
               path="/pagamentos"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="view_payment">
                   <AppLayout>
                     <PaymentsPage />
                   </AppLayout>
@@ -96,7 +100,7 @@ const App = () => (
             <Route
               path="/calendario"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="view_calendarevent">
                   <AppLayout>
                     <CalendarPage />
                   </AppLayout>
@@ -113,7 +117,7 @@ const App = () => (
             <Route
               path="/rh"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="view_employee">
                   <AppLayout>
                     <HRPage />
                   </AppLayout>
@@ -121,19 +125,22 @@ const App = () => (
               }
             />
             <Route
-              path="/contabilidade"
-              element={
-                <ProtectedRoute>
-                  <AppLayout>
-                    <AccountingPage />
-                  </AppLayout>
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="/utilizadores"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute
+                  anyOfPermissions={[
+                    "view_user",
+                    "add_user",
+                    "change_user",
+                    "delete_user",
+                    "view_role",
+                    "add_role",
+                    "change_role",
+                    "delete_role",
+                    "view_systemsettings",
+                    "change_systemsettings",
+                  ]}
+                >
                   <AppLayout>
                     <UsersPage />
                   </AppLayout>
@@ -143,7 +150,7 @@ const App = () => (
             <Route
               path="/auditoria"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute requiredPermission="view_user">
                   <AppLayout>
                     <AuditLogPage />
                   </AppLayout>
@@ -160,11 +167,22 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/verificar"
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <VerifyContractPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              }
+            />
             {/* Rota desconhecida → redireciona para login (protegido por default) */}
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
+        </ThemeProvider>
     </AuthProvider>
   </QueryClientProvider>
 );

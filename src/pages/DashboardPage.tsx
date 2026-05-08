@@ -50,6 +50,7 @@ import {
 } from "recharts";
 import { formatCurrency, formatDate } from "@/data/mockData";
 import { QueryErrorAlert } from "@/components/QueryErrorAlert";
+import { parMetricsApi } from "@/lib/api";
 
 const formatK = (v: unknown): string => {
   const n = typeof v === "number" && Number.isFinite(v) ? v : 0;
@@ -63,6 +64,12 @@ export default function DashboardPage() {
     queryKey: ["system-settings"],
     queryFn: systemApi.get,
   });
+
+  const { data: parData } = useQuery({
+    queryKey: ["par-metrics"],
+    queryFn: () => parMetricsApi.get(),
+    staleTime: 60_000,
+  });
   const { data: dashboard, isLoading, isError, refetch } = useQuery<ApiDashboardSummary>({
     queryKey: ["dashboard-summary"],
     queryFn: dashboardApi.getSummary,
@@ -73,11 +80,15 @@ export default function DashboardPage() {
   const primaryColor = systemSettings?.primary_color ?? "#0f766e";
   const bannerColor = systemSettings?.login_banner_color?.trim() || primaryColor;
   const logoUrl = systemSettings?.logo_url;
+  const heroKicker = systemSettings?.login_banner_kicker?.trim() || tagline;
   const heroTitle = systemSettings?.login_banner_title?.trim() || brandName;
   const heroSubtitle = loginBannerSubtitleText(systemSettings ?? null);
   const heroBodyDefault =
-    "Clientes, empréstimos, pagamentos, recursos humanos e contabilidade. Acompanhe a carteira e fluxo de caixa em tempo real.";
+    "Clientes, empréstimos, pagamentos e recursos humanos. Acompanhe a carteira e actividade em tempo real.";
   const heroBody = loginBannerBodyText(systemSettings ?? null, heroBodyDefault);
+  const heroImageUrl =
+    systemSettings?.login_banner_image_url?.trim() ||
+    "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=1200&q=80";
 
   const rawSummary = dashboard?.summary;
   const summary = {
@@ -162,7 +173,7 @@ export default function DashboardPage() {
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30"
           style={{
-            backgroundImage: `url(https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=1200&q=80)`,
+            backgroundImage: `url(${heroImageUrl})`,
           }}
           aria-hidden
         />
@@ -188,7 +199,7 @@ export default function DashboardPage() {
               ) : (
                 <HandCoins className="h-4 w-4" />
               )}
-              {tagline}
+              {heroKicker}
             </div>
             <h1
               className={`font-bold text-white tracking-tight mb-2 ${systemSettings?.login_title_font_size?.trim() ? "" : "text-2xl sm:text-3xl lg:text-4xl"}`}
@@ -521,6 +532,39 @@ export default function DashboardPage() {
             })}
           </div>
         )}
+        {/* Portfolio at Risk */}
+        <div className="rounded-2xl border bg-card p-5 shadow-sm space-y-3 lg:col-span-1">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold">Carteira em Risco</span>
+            {(parData?.overdue.count ?? 0) > 0 && (
+              <span className="rounded-full bg-destructive/10 text-destructive text-xs px-2 py-0.5 font-medium">
+                {parData!.overdue.count} em atraso
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {([
+              { label: "PAR30", v: parData?.par30 },
+              { label: "PAR60", v: parData?.par60 },
+              { label: "PAR90", v: parData?.par90 },
+            ] as const).map(({ label, v }) => (
+              <div key={label} className="rounded-lg bg-muted/50 p-2">
+                <p className="text-[11px] text-muted-foreground">{label}</p>
+                <p className={`text-base font-bold tabular-nums ${
+                  (v?.ratio ?? 0) > 10 ? "text-destructive" :
+                  (v?.ratio ?? 0) > 3  ? "text-amber-500"   : "text-emerald-600"
+                }`}>{(v?.ratio ?? 0).toFixed(1)}%</p>
+                <p className="text-[10px] text-muted-foreground">{v?.count ?? 0} empr.</p>
+              </div>
+            ))}
+          </div>
+          {(parData?.due_this_week.count ?? 0) > 0 && (
+            <p className="text-xs text-muted-foreground border-t pt-2">
+              <span className="font-medium text-amber-600">{parData!.due_this_week.count} pgtos</span> vencem em 7 dias
+              {" · "}{new Intl.NumberFormat("pt-MZ",{style:"currency",currency:"MZN"}).format(parData!.due_this_week.amount)}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );

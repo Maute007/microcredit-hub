@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser, Permission
 from django.db import models
@@ -122,6 +124,18 @@ class SystemSettings(models.Model):
       help_text=_("Texto mostrado aos utilizadores quando o sistema está temporariamente indisponível."),
   )
   # --- Banner login / hero: texto e alinhamento (parametrizável) ---
+  login_banner_kicker = models.CharField(
+      max_length=120,
+      blank=True,
+      verbose_name=_("Kicker do banner (selo)"),
+      help_text=_("Texto pequeno em forma de selo no banner (ex.: nome do sistema). Vazio = usa nome."),
+  )
+  login_banner_image_url = models.URLField(
+      max_length=600,
+      blank=True,
+      verbose_name=_("Imagem de fundo do banner (URL)"),
+      help_text=_("URL opcional para imagem de fundo do banner (login e dashboard)."),
+  )
   login_banner_title = models.CharField(
       max_length=300,
       blank=True,
@@ -206,6 +220,132 @@ class SystemSettings(models.Model):
       default=True,
       verbose_name=_("Mostrar caixas de destaques no login"),
   )
+
+  # Calendário: rótulos configuráveis por tipo (categorias)
+  calendar_type_labels = models.JSONField(
+      default=dict,
+      blank=True,
+      verbose_name=_("Rótulos de categorias do calendário"),
+      help_text=_("Mapa tipo->rótulo (ex.: meeting='Reunião')."),
+  )
+
+  # Empréstimos: política simples de juros e prazos comuns (em dias)
+  loan_default_interest_rate = models.DecimalField(
+      max_digits=5,
+      decimal_places=2,
+      default=Decimal("0.00"),
+      verbose_name=_("Taxa de juro padrão (empréstimos) (%)"),
+      help_text=_("Usada quando a categoria não define taxa padrão. Percentagem (ex.: 5 = 5%)."),
+  )
+  loan_allowed_terms_days = models.JSONField(
+      default=list,
+      blank=True,
+      verbose_name=_("Prazos permitidos (dias)"),
+      help_text=_("Lista de prazos em dias (ex.: 30, 60, 90, 120). Vazio = sem restrição."),
+  )
+
+  # Credor (dados para contratos e documentos)
+  creditor_legal_name = models.CharField(
+      max_length=200,
+      blank=True,
+      verbose_name=_("Nome legal do credor"),
+      help_text=_("Ex.: Kuchukuro Microcrédito E.I (Eurocrédito). Se vazio, usa o nome do sistema."),
+  )
+  creditor_address = models.CharField(
+      max_length=300,
+      blank=True,
+      verbose_name=_("Morada/sede do credor"),
+      help_text=_("Ex.: Av. 25 de Setembro..., Prédio..., Cidade..."),
+  )
+  creditor_city = models.CharField(
+      max_length=120,
+      blank=True,
+      verbose_name=_("Cidade do credor"),
+      help_text=_("Ex.: Maputo"),
+  )
+
+  # Contrato (modelo de folha)
+  contract_theme_color = models.CharField(
+      max_length=20,
+      blank=True,
+      verbose_name=_("Cor do contrato (tema)"),
+      help_text=_("Hex/CSS. Vazio = usa cor primária."),
+  )
+  contract_page_bg_color = models.CharField(
+      max_length=20,
+      blank=True,
+      verbose_name=_("Cor de fundo da folha (contrato)"),
+      help_text=_("Cor da página inteira ao imprimir. Vazio = branco."),
+  )
+  contract_logo_url = models.URLField(
+      max_length=600,
+      blank=True,
+      verbose_name=_("Logo do contrato (URL)"),
+      help_text=_("Logo exibido na folha do contrato. Vazio = usa o logo do sistema."),
+  )
+  contract_logo = models.ImageField(
+      upload_to="contract_logos/",
+      blank=True,
+      null=True,
+      verbose_name=_("Logo do contrato (ficheiro)"),
+      help_text=_("Opcional: imagem carregada no servidor (tem prioridade sobre a URL)."),
+  )
+  contract_header_title = models.CharField(
+      max_length=120,
+      blank=True,
+      verbose_name=_("Título do cabeçalho do contrato"),
+      help_text=_("Ex.: MicroCrédito Solidário"),
+  )
+  contract_header_subtitle = models.CharField(
+      max_length=200,
+      blank=True,
+      verbose_name=_("Subtítulo do cabeçalho do contrato"),
+      help_text=_("Ex.: Instituição de crédito comunitário • Moçambique"),
+  )
+  contract_doc_badge = models.CharField(
+      max_length=120,
+      blank=True,
+      verbose_name=_("Selo do documento"),
+      help_text=_("Ex.: Documento oficial"),
+  )
+  contract_general_clauses = models.TextField(
+      blank=True,
+      verbose_name=_("Cláusulas gerais do contrato (secção 03)"),
+      help_text=_(
+          "Texto legal fixo da instituição para a secção “Condições gerais e obrigações” da folha de contrato. "
+          "Isto é o contrato/modelo institucional. Os “Termos e condições” da categoria vêm do tipo de empréstimo e são anexados à parte."
+      ),
+  )
+  contract_include_clauses_on_sheet = models.BooleanField(
+      default=True,
+      verbose_name=_("Incluir cláusulas institucionais na folha"),
+      help_text=_(
+          "Quando desactivo, a folha (secção 03) não mostra o bloco de cláusulas gerais da instituição "
+          "(nem a lista breve por omissão). Os termos da categoria do empréstimo mantêm-se se existirem."
+      ),
+  )
+
+  # BdM Report — informações da instituição
+  bom_province = models.CharField(max_length=100, blank=True, verbose_name=_("Província (relatório BdM)"))
+  bom_phone = models.CharField(max_length=50, blank=True, verbose_name=_("Telefone (relatório BdM)"))
+  bom_fax = models.CharField(max_length=50, blank=True, verbose_name=_("Fax (relatório BdM)"))
+  bom_email = models.EmailField(max_length=254, blank=True, verbose_name=_("E-mail da instituição (relatório BdM)"))
+  bom_num_workers = models.PositiveIntegerField(default=1, verbose_name=_("Nº de Trabalhadores"))
+  bom_start_date = models.CharField(max_length=100, blank=True, verbose_name=_("Data de Início das Actividades"), help_text=_("Ex.: Dezembro de 2024"))
+  bom_operator_name = models.CharField(max_length=200, blank=True, verbose_name=_("Nome do Operador"))
+
+  # BdM Report — dados financeiros estáticos
+  bom_initial_capital = models.DecimalField(max_digits=16, decimal_places=2, default=Decimal("0.00"), verbose_name=_("Capital Inicial (MZN)"))
+  bom_current_capital = models.DecimalField(max_digits=16, decimal_places=2, default=Decimal("0.00"), verbose_name=_("Capital Actual (MZN)"))
+  bom_own_capital = models.DecimalField(max_digits=16, decimal_places=2, default=Decimal("0.00"), verbose_name=_("Capitais Próprios (MZN)"))
+  bom_foreign_capital_national = models.DecimalField(max_digits=16, decimal_places=2, default=Decimal("0.00"), verbose_name=_("Capitais Alheios Nacionais (MZN)"))
+  bom_foreign_capital_foreign = models.DecimalField(max_digits=16, decimal_places=2, default=Decimal("0.00"), verbose_name=_("Capitais Alheios Estrangeiros (MZN)"))
+  bom_financing_loans = models.DecimalField(max_digits=16, decimal_places=2, default=Decimal("0.00"), verbose_name=_("Empréstimos obtidos no período (MZN)"))
+  bom_financing_donations = models.DecimalField(max_digits=16, decimal_places=2, default=Decimal("0.00"), verbose_name=_("Donativos obtidos no período (MZN)"))
+  bom_financing_capital_increase = models.DecimalField(max_digits=16, decimal_places=2, default=Decimal("0.00"), verbose_name=_("Aumento do capital com recursos próprios (MZN)"))
+  # Situação financeira (3 meses): store as JSON list of {caixa, bancos, outros_activos}
+  bom_financial_situation = models.JSONField(default=list, blank=True, verbose_name=_("Situação Financeira (3 meses)"), help_text=_("Lista de 3 objectos: [{caixa, bancos, outros_activos}, ...]"))
+
   updated_at = models.DateTimeField(auto_now=True)
 
   class Meta:

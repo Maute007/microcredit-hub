@@ -19,6 +19,7 @@ class ClientSerializer(serializers.ModelSerializer):
             "address",
             "city",
             "occupation",
+            "gender",
             "status",
             "created_at",
             "total_loans",

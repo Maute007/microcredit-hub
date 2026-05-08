@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .auth_views import CookieLogoutView, CookieTokenObtainPairView, CookieTokenRefreshView
-from .views import DebugPermissionsView, MeView, PermissionListView, SystemSettingsView
+from .views import ContractLogoUploadView, DebugPermissionsView, MeView, PermissionListView, SystemSettingsView
 from .audit_views import AuditLogView, AuditLogLatestView, AuditLogDetailView
 
 urlpatterns = [
@@ -12,6 +12,7 @@ urlpatterns = [
     path("permissions/", PermissionListView.as_view(), name="permission_list"),
     path("debug-perms/", DebugPermissionsView.as_view(), name="debug_permissions"),
     path("settings/", SystemSettingsView.as_view(), name="system_settings"),
+    path("settings/contract-logo/", ContractLogoUploadView.as_view(), name="contract_logo_upload"),
     path("audit/", AuditLogView.as_view(), name="audit_log"),
     path("audit/latest/", AuditLogLatestView.as_view(), name="audit_log_latest"),
     path("audit/detail/", AuditLogDetailView.as_view(), name="audit_log_detail"),

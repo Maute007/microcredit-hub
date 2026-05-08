@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { authApi, setSessionExpired, type AuthUser } from "@/lib/api";
+import { ApiError, authApi, setSessionExpired, type AuthUser } from "@/lib/api";
 
 interface AuthContextValue {
   user: AuthUser | null;
@@ -32,14 +32,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setUser(null);
       }
-    } catch {
-      setUser(null);
+    } catch (err) {
+      // Importante: não fazer "logout" visual por falhas temporárias de rede/backend.
+      // Só limpamos user quando a sessão realmente expirou (401).
+      if (err instanceof ApiError && err.status === 401) {
+        setUser(null);
+        return;
+      }
+      // Se já existe user, preserva-o (evita loop e logout em falhas temporárias).
+      setUser((prev) => prev ?? null);
     }
   }, []);
 
   const login = useCallback(async (identifier: string, password: string) => {
     const data = await authApi.login(identifier, password);
     setSessionExpired(false);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("auth:had-session", "1");
+    }
     if (data.user) setUser(data.user);
     else await refreshUser();
   }, [refreshUser]);
@@ -47,12 +57,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await authApi.logout();
+    } catch {
+      // Se a sessão já expirou, o logout no servidor pode falhar (401).
+      // Ainda assim, limpamos o estado local para evitar loops.
     } finally {
       setUser(null);
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("auth:had-session");
+      }
     }
   }, []);
 
   useEffect(() => {
+    // Em /login, não há sessão a revalidar — evita cadeia de chamadas 401
+    // (me → refresh → logout) ao recarregar o ecrã de autenticação.
+    // O bootstrap só corre quando o utilizador navega para uma rota protegida,
+    // ou quando tem indicação de sessão prévia (cookie de auth visível).
+    if (typeof window !== "undefined") {
+      const onLogin = window.location.pathname === "/login";
+      // Heurística: se nunca houve login bem-sucedido neste browser, e estamos no login,
+      // não tentamos `me()` para não gerar 401s ruidosos no servidor.
+      const hadSession = window.localStorage.getItem("auth:had-session") === "1";
+      if (onLogin && !hadSession) {
+        setIsLoading(false);
+        return;
+      }
+    }
     refreshUser().finally(() => setIsLoading(false));
   }, [refreshUser]);
 

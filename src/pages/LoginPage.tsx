@@ -46,13 +46,17 @@ export default function LoginPage() {
   const primaryColor = systemSettings?.primary_color || "#0f766e";
   const tagline = systemSettings?.tagline || "Gestão moderna de microcrédito.";
   const defaultBody =
-    "Organize clientes, empréstimos, pagamentos, recursos humanos e contabilidade numa única plataforma. Acompanhe a carteira, fluxo de caixa e risco em tempo real.";
+    "Organize clientes, empréstimos, pagamentos e recursos humanos numa única plataforma. Acompanhe a carteira e risco em tempo real.";
   const loginDescription = loginBannerBodyText(systemSettings, defaultBody);
   const bannerTitle = loginBannerTitleText(systemSettings, tagline);
   const bannerSubtitle = loginBannerSubtitleText(systemSettings);
+  const bannerKicker = systemSettings?.login_banner_kicker?.trim() || brandName;
   const loginBannerColor = systemSettings?.login_banner_color?.trim() || primaryColor;
   const loginCardColor = systemSettings?.login_card_color || "#ffffff";
   const showFeatures = loginShowFeatureBoxes(systemSettings);
+  const bannerImageUrl =
+    systemSettings?.login_banner_image_url?.trim() ||
+    "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=1200&q=80";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,7 +101,7 @@ export default function LoginPage() {
               className="w-full h-full bg-cover bg-center"
               style={{
                 backgroundImage:
-                  "url(https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=1200&q=80)",
+                  `url(${bannerImageUrl})`,
               }}
             />
           </div>
@@ -115,7 +119,7 @@ export default function LoginPage() {
                     <Building2 className="h-3 w-3" />
                   )}
                 </span>
-                {brandName}
+                {bannerKicker}
               </div>
               <h1
                 className={`font-bold leading-snug mb-2 ${systemSettings?.login_title_font_size?.trim() ? "" : "text-2xl"}`}

@@ -1,8 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
 import { QueryErrorAlert } from "@/components/QueryErrorAlert";
 import { DataTable } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,11 +22,13 @@ import {
   type ApiEmployee,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { ContractLogoCropDialog } from "@/components/ContractLogoCropDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Accordion,
   AccordionContent,
@@ -128,7 +131,7 @@ export default function UsersPage() {
   const showSettingsTab = canViewSystemSettings || canChangeSystemSettings;
   const defaultTab = showUsersTab ? "users" : showRolesTab ? "roles" : "settings";
 
-  const { data: users = [], isError: usersError, refetch: refetchUsers } = useQuery<ApiUser[]>({
+  const { data: users = [], isLoading: usersLoading, isError: usersError, refetch: refetchUsers } = useQuery<ApiUser[]>({
     queryKey: ["users"],
     queryFn: usersApi.list,
     enabled: showUsersTab,
@@ -315,7 +318,15 @@ export default function UsersPage() {
             data={visibleUsers}
             columns={userColumns}
             searchKeys={["username", "email", "employee_name"]}
+            loading={usersLoading}
             onRowClick={canViewUser || canChangeUser || canDeleteUser ? setEditingUser : undefined}
+            emptyState={
+              <EmptyState
+                icon={UserPlus}
+                title="Nenhum utilizador além do seu"
+                description="Adicione utilizadores e atribua perfis de acesso para que outras pessoas possam usar o sistema."
+              />
+            }
             renderRowActions={(canChangeUser || canDeleteUser) ? (u) => (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -917,6 +928,11 @@ function SystemSettingsForm({
   canEdit: boolean;
   onSubmit: (payload: Partial<ApiSystemSettings>) => void;
 }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [cropContractLogoOpen, setCropContractLogoOpen] = useState(false);
+  const [cropContractLogoSrc, setCropContractLogoSrc] = useState<string | null>(null);
+  const contractLogoFileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(initial?.name ?? "Microcredit Hub");
   const [logoUrl, setLogoUrl] = useState(initial?.logo_url ?? "");
   const [primaryColor, setPrimaryColor] = useState(initial?.primary_color ?? "#0f766e");
@@ -924,6 +940,8 @@ function SystemSettingsForm({
   const [loginDescription, setLoginDescription] = useState(initial?.login_description ?? "");
   const [loginBannerColor, setLoginBannerColor] = useState(initial?.login_banner_color ?? "");
   const [loginCardColor, setLoginCardColor] = useState(initial?.login_card_color ?? "");
+  const [loginBannerKicker, setLoginBannerKicker] = useState(initial?.login_banner_kicker ?? "");
+  const [loginBannerImageUrl, setLoginBannerImageUrl] = useState(initial?.login_banner_image_url ?? "");
   const [loginBannerTitle, setLoginBannerTitle] = useState(initial?.login_banner_title ?? "");
   const [loginBannerSubtitle, setLoginBannerSubtitle] = useState(initial?.login_banner_subtitle ?? "");
   const [loginBannerBody, setLoginBannerBody] = useState(initial?.login_banner_body ?? "");
@@ -941,6 +959,50 @@ function SystemSettingsForm({
   const [loginBodyFontSize, setLoginBodyFontSize] = useState(initial?.login_body_font_size ?? "");
   const [loginBodyColor, setLoginBodyColor] = useState(initial?.login_body_color ?? "");
   const [loginShowFeatureBoxes, setLoginShowFeatureBoxes] = useState(initial?.login_show_feature_boxes !== false);
+  const [calendarTypeLabels, setCalendarTypeLabels] = useState<Record<string, string>>(initial?.calendar_type_labels ?? {});
+  const [loanDefaultInterestRate, setLoanDefaultInterestRate] = useState(
+    initial?.loan_default_interest_rate != null ? String(initial.loan_default_interest_rate) : "0",
+  );
+  const [loanAllowedTermsDays, setLoanAllowedTermsDays] = useState<number[]>(
+    Array.isArray(initial?.loan_allowed_terms_days) ? initial!.loan_allowed_terms_days : [15, 30, 60, 90, 120],
+  );
+  const [creditorLegalName, setCreditorLegalName] = useState(initial?.creditor_legal_name ?? "");
+  const [creditorAddress, setCreditorAddress] = useState(initial?.creditor_address ?? "");
+  const [creditorCity, setCreditorCity] = useState(initial?.creditor_city ?? "");
+  // ── BdM Report ──────────────────────────────────────────────────────────────
+  const [bomProvince, setBomProvince] = useState(initial?.bom_province ?? "");
+  const [bomPhone, setBomPhone] = useState(initial?.bom_phone ?? "");
+  const [bomFax, setBomFax] = useState(initial?.bom_fax ?? "");
+  const [bomEmail, setBomEmail] = useState(initial?.bom_email ?? "");
+  const [bomNumWorkers, setBomNumWorkers] = useState(String(initial?.bom_num_workers ?? 1));
+  const [bomStartDate, setBomStartDate] = useState(initial?.bom_start_date ?? "");
+  const [bomOperatorName, setBomOperatorName] = useState(initial?.bom_operator_name ?? "");
+  const [bomInitialCapital, setBomInitialCapital] = useState(String(initial?.bom_initial_capital ?? 0));
+  const [bomCurrentCapital, setBomCurrentCapital] = useState(String(initial?.bom_current_capital ?? 0));
+  const [bomOwnCapital, setBomOwnCapital] = useState(String(initial?.bom_own_capital ?? 0));
+  const [bomForeignNational, setBomForeignNational] = useState(String(initial?.bom_foreign_capital_national ?? 0));
+  const [bomForeignForeign, setBomForeignForeign] = useState(String(initial?.bom_foreign_capital_foreign ?? 0));
+  const [bomFinancingLoans, setBomFinancingLoans] = useState(String(initial?.bom_financing_loans ?? 0));
+  const [bomFinancingDonations, setBomFinancingDonations] = useState(String(initial?.bom_financing_donations ?? 0));
+  const [bomFinancingCapitalIncrease, setBomFinancingCapitalIncrease] = useState(String(initial?.bom_financing_capital_increase ?? 0));
+  type FinSitRow = { caixa: number; bancos: number; outros_activos: number };
+  const initFinSit = (): FinSitRow[] => {
+    const d = initial?.bom_financial_situation;
+    return Array.isArray(d) && d.length === 3
+      ? (d as FinSitRow[])
+      : [{ caixa: 0, bancos: 0, outros_activos: 0 }, { caixa: 0, bancos: 0, outros_activos: 0 }, { caixa: 0, bancos: 0, outros_activos: 0 }];
+  };
+  const [bomFinancialSituation, setBomFinancialSituation] = useState<FinSitRow[]>(initFinSit);
+  const [contractThemeColor, setContractThemeColor] = useState(initial?.contract_theme_color ?? "");
+  const [contractPageBgColor, setContractPageBgColor] = useState(initial?.contract_page_bg_color ?? "");
+  const [contractLogoUrl, setContractLogoUrl] = useState(initial?.contract_logo_url ?? "");
+  const [contractHeaderTitle, setContractHeaderTitle] = useState(initial?.contract_header_title ?? "");
+  const [contractHeaderSubtitle, setContractHeaderSubtitle] = useState(initial?.contract_header_subtitle ?? "");
+  const [contractDocBadge, setContractDocBadge] = useState(initial?.contract_doc_badge ?? "");
+  const [contractGeneralClauses, setContractGeneralClauses] = useState(initial?.contract_general_clauses ?? "");
+  const [contractIncludeClausesOnSheet, setContractIncludeClausesOnSheet] = useState(
+    initial?.contract_include_clauses_on_sheet !== false,
+  );
 
   useEffect(() => {
     if (!initial) return;
@@ -951,6 +1013,8 @@ function SystemSettingsForm({
     setLoginDescription(initial.login_description ?? "");
     setLoginBannerColor(initial.login_banner_color ?? "");
     setLoginCardColor(initial.login_card_color ?? "");
+    setLoginBannerKicker(initial.login_banner_kicker ?? "");
+    setLoginBannerImageUrl(initial.login_banner_image_url ?? "");
     setLoginBannerTitle(initial.login_banner_title ?? "");
     setLoginBannerSubtitle(initial.login_banner_subtitle ?? "");
     setLoginBannerBody(initial.login_banner_body ?? "");
@@ -966,6 +1030,36 @@ function SystemSettingsForm({
     setLoginBodyFontSize(initial.login_body_font_size ?? "");
     setLoginBodyColor(initial.login_body_color ?? "");
     setLoginShowFeatureBoxes(initial.login_show_feature_boxes !== false);
+    setCalendarTypeLabels(initial.calendar_type_labels ?? {});
+    setLoanDefaultInterestRate(initial.loan_default_interest_rate != null ? String(initial.loan_default_interest_rate) : "0");
+    setLoanAllowedTermsDays(Array.isArray(initial.loan_allowed_terms_days) ? initial.loan_allowed_terms_days : [15, 30, 60, 90, 120]);
+    setCreditorLegalName(initial.creditor_legal_name ?? "");
+    setCreditorAddress(initial.creditor_address ?? "");
+    setCreditorCity(initial.creditor_city ?? "");
+    setBomProvince(initial.bom_province ?? "");
+    setBomPhone(initial.bom_phone ?? "");
+    setBomFax(initial.bom_fax ?? "");
+    setBomEmail(initial.bom_email ?? "");
+    setBomNumWorkers(String(initial.bom_num_workers ?? 1));
+    setBomStartDate(initial.bom_start_date ?? "");
+    setBomOperatorName(initial.bom_operator_name ?? "");
+    setBomInitialCapital(String(initial.bom_initial_capital ?? 0));
+    setBomCurrentCapital(String(initial.bom_current_capital ?? 0));
+    setBomOwnCapital(String(initial.bom_own_capital ?? 0));
+    setBomForeignNational(String(initial.bom_foreign_capital_national ?? 0));
+    setBomForeignForeign(String(initial.bom_foreign_capital_foreign ?? 0));
+    setBomFinancingLoans(String(initial.bom_financing_loans ?? 0));
+    setBomFinancingDonations(String(initial.bom_financing_donations ?? 0));
+    setBomFinancingCapitalIncrease(String(initial.bom_financing_capital_increase ?? 0));
+    { const d2 = initial.bom_financial_situation; setBomFinancialSituation(Array.isArray(d2) && d2.length === 3 ? (d2 as FinSitRow[]) : [{ caixa: 0, bancos: 0, outros_activos: 0 }, { caixa: 0, bancos: 0, outros_activos: 0 }, { caixa: 0, bancos: 0, outros_activos: 0 }]); }
+    setContractThemeColor(initial.contract_theme_color ?? "");
+    setContractPageBgColor(initial.contract_page_bg_color ?? "");
+    setContractLogoUrl(initial.contract_logo_url ?? "");
+    setContractHeaderTitle(initial.contract_header_title ?? "");
+    setContractHeaderSubtitle(initial.contract_header_subtitle ?? "");
+    setContractDocBadge(initial.contract_doc_badge ?? "");
+    setContractGeneralClauses(initial.contract_general_clauses ?? "");
+    setContractIncludeClausesOnSheet(initial.contract_include_clauses_on_sheet !== false);
   }, [initial?.id, initial?.updated_at]);
 
   return (
@@ -982,6 +1076,8 @@ function SystemSettingsForm({
           login_description: loginDescription.trim() || undefined,
           login_banner_color: loginBannerColor.trim() || undefined,
           login_card_color: loginCardColor.trim() || undefined,
+          login_banner_kicker: loginBannerKicker.trim() || undefined,
+          login_banner_image_url: loginBannerImageUrl.trim() || undefined,
           login_banner_title: loginBannerTitle.trim() || undefined,
           login_banner_subtitle: loginBannerSubtitle.trim() || undefined,
           login_banner_body: loginBannerBody.trim() || undefined,
@@ -997,6 +1093,38 @@ function SystemSettingsForm({
           login_body_font_size: loginBodyFontSize.trim() || undefined,
           login_body_color: loginBodyColor.trim() || undefined,
           login_show_feature_boxes: loginShowFeatureBoxes,
+          calendar_type_labels: calendarTypeLabels,
+          loan_default_interest_rate: Math.max(0, parseFloat(loanDefaultInterestRate.replace(",", ".")) || 0),
+          loan_allowed_terms_days: loanAllowedTermsDays,
+          // Enviar string vazia limpa o valor no backend (em vez de undefined = "não atualiza").
+          creditor_legal_name: creditorLegalName.trim(),
+          creditor_address: creditorAddress.trim(),
+          creditor_city: creditorCity.trim(),
+          // BdM
+          bom_province: bomProvince.trim(),
+          bom_phone: bomPhone.trim(),
+          bom_fax: bomFax.trim(),
+          bom_email: bomEmail.trim(),
+          bom_num_workers: Math.max(1, parseInt(bomNumWorkers, 10) || 1),
+          bom_start_date: bomStartDate.trim(),
+          bom_operator_name: bomOperatorName.trim(),
+          bom_initial_capital: parseFloat(bomInitialCapital.replace(",", ".")) || 0,
+          bom_current_capital: parseFloat(bomCurrentCapital.replace(",", ".")) || 0,
+          bom_own_capital: parseFloat(bomOwnCapital.replace(",", ".")) || 0,
+          bom_foreign_capital_national: parseFloat(bomForeignNational.replace(",", ".")) || 0,
+          bom_foreign_capital_foreign: parseFloat(bomForeignForeign.replace(",", ".")) || 0,
+          bom_financing_loans: parseFloat(bomFinancingLoans.replace(",", ".")) || 0,
+          bom_financing_donations: parseFloat(bomFinancingDonations.replace(",", ".")) || 0,
+          bom_financing_capital_increase: parseFloat(bomFinancingCapitalIncrease.replace(",", ".")) || 0,
+          bom_financial_situation: bomFinancialSituation,
+          contract_theme_color: contractThemeColor.trim(),
+          contract_page_bg_color: contractPageBgColor.trim(),
+          contract_logo_url: contractLogoUrl.trim(),
+          contract_header_title: contractHeaderTitle.trim(),
+          contract_header_subtitle: contractHeaderSubtitle.trim(),
+          contract_doc_badge: contractDocBadge.trim(),
+          contract_general_clauses: contractGeneralClauses.trim(),
+          contract_include_clauses_on_sheet: contractIncludeClausesOnSheet,
         });
       }}
     >
@@ -1044,6 +1172,24 @@ function SystemSettingsForm({
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Painel esquerdo do login (ecrã grande)
           </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Texto do selo (kicker)</Label>
+              <Input
+                value={loginBannerKicker}
+                onChange={(e) => setLoginBannerKicker(e.target.value)}
+                placeholder="Vazio = usa nome do sistema"
+              />
+            </div>
+            <div>
+              <Label>Imagem de fundo (URL)</Label>
+              <Input
+                value={loginBannerImageUrl}
+                onChange={(e) => setLoginBannerImageUrl(e.target.value)}
+                placeholder="https://... (opcional)"
+              />
+            </div>
+          </div>
           <div>
             <Label>Frase de impacto (tagline)</Label>
             <Input
@@ -1216,6 +1362,384 @@ function SystemSettingsForm({
           </label>
         </div>
 
+        <div className="rounded-xl border bg-muted/40 p-4 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Credor (para contratos/documentos)
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <Label>Nome legal do credor</Label>
+              <Input
+                value={creditorLegalName}
+                onChange={(e) => setCreditorLegalName(e.target.value)}
+                placeholder="Ex.: Kuchukuro Microcrédito E.I (Eurocrédito)"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Morada / sede</Label>
+              <Input
+                value={creditorAddress}
+                onChange={(e) => setCreditorAddress(e.target.value)}
+                placeholder="Ex.: Av. 25 de Setembro..., Prédio..., Nº..., Maputo"
+              />
+            </div>
+            <div>
+              <Label>Cidade</Label>
+              <Input
+                value={creditorCity}
+                onChange={(e) => setCreditorCity(e.target.value)}
+                placeholder="Ex.: Maputo"
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Se ficar vazio, o contrato usa o nome do sistema e deixa espaços para preencher manualmente.
+          </p>
+        </div>
+
+        <div className="rounded-xl border bg-muted/40 p-4 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Relatório Banco de Moçambique (BdM)</p>
+          <p className="text-xs text-muted-foreground -mt-2">Informações da instituição usadas na Ficha de Reporte Trimestral submetida ao BdM.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <Label>Nome do Operador (responsável)</Label>
+              <Input value={bomOperatorName} onChange={(e) => setBomOperatorName(e.target.value)} placeholder="Ex.: Atilio Jossias Arlindo Macave" />
+            </div>
+            <div>
+              <Label>Província</Label>
+              <Input value={bomProvince} onChange={(e) => setBomProvince(e.target.value)} placeholder="Ex.: Maputo" />
+            </div>
+            <div>
+              <Label>Telefone (instituição)</Label>
+              <Input value={bomPhone} onChange={(e) => setBomPhone(e.target.value)} placeholder="+258 8X XXX XXXX" />
+            </div>
+            <div>
+              <Label>Fax</Label>
+              <Input value={bomFax} onChange={(e) => setBomFax(e.target.value)} placeholder="Opcional" />
+            </div>
+            <div>
+              <Label>E-mail institucional</Label>
+              <Input type="email" value={bomEmail} onChange={(e) => setBomEmail(e.target.value)} placeholder="geral@instituicao.co.mz" />
+            </div>
+            <div>
+              <Label>Nº de Trabalhadores</Label>
+              <Input type="number" min={1} value={bomNumWorkers} onChange={(e) => setBomNumWorkers(e.target.value)} />
+            </div>
+            <div>
+              <Label>Data de início das actividades</Label>
+              <Input value={bomStartDate} onChange={(e) => setBomStartDate(e.target.value)} placeholder="Ex.: Dezembro de 2024" />
+            </div>
+          </div>
+          <div className="border-t pt-3 space-y-3">
+            <p className="text-xs font-medium text-muted-foreground">Capital (secção 2.5)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Capital inicial (MZN)</Label><Input type="number" min={0} step="0.01" value={bomInitialCapital} onChange={(e) => setBomInitialCapital(e.target.value)} /></div>
+              <div><Label>Capital actual (MZN)</Label><Input type="number" min={0} step="0.01" value={bomCurrentCapital} onChange={(e) => setBomCurrentCapital(e.target.value)} /></div>
+            </div>
+            <p className="text-xs font-medium text-muted-foreground pt-1">Fontes de Financiamento (secção 2.3)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div><Label>Capitais próprios (MZN)</Label><Input type="number" min={0} step="0.01" value={bomOwnCapital} onChange={(e) => setBomOwnCapital(e.target.value)} /></div>
+              <div><Label>Alheios nacionais (MZN)</Label><Input type="number" min={0} step="0.01" value={bomForeignNational} onChange={(e) => setBomForeignNational(e.target.value)} /></div>
+              <div><Label>Alheios estrangeiros (MZN)</Label><Input type="number" min={0} step="0.01" value={bomForeignForeign} onChange={(e) => setBomForeignForeign(e.target.value)} /></div>
+            </div>
+            <p className="text-xs font-medium text-muted-foreground pt-1">Financiamentos do Período (secção 2.4)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div><Label>Empréstimos obtidos (MZN)</Label><Input type="number" min={0} step="0.01" value={bomFinancingLoans} onChange={(e) => setBomFinancingLoans(e.target.value)} /></div>
+              <div><Label>Donativos obtidos (MZN)</Label><Input type="number" min={0} step="0.01" value={bomFinancingDonations} onChange={(e) => setBomFinancingDonations(e.target.value)} /></div>
+              <div><Label>Aumento de capital (MZN)</Label><Input type="number" min={0} step="0.01" value={bomFinancingCapitalIncrease} onChange={(e) => setBomFinancingCapitalIncrease(e.target.value)} /></div>
+            </div>
+            <p className="text-xs font-medium text-muted-foreground pt-1">Situação Financeira — 3 meses (secção 3)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {([0, 1, 2] as const).map((i) => (
+                <div key={i} className="rounded-lg border bg-background p-3 space-y-2">
+                  <p className="text-xs font-semibold">Mês {i + 1}</p>
+                  <div><Label className="text-xs">Caixa (MZN)</Label>
+                    <Input type="number" min={0} step="0.01" value={bomFinancialSituation[i]?.caixa ?? 0}
+                      onChange={(e) => { const v = parseFloat(e.target.value)||0; setBomFinancialSituation((p) => p.map((r,idx)=>idx===i?{...r,caixa:v}:r)); }} /></div>
+                  <div><Label className="text-xs">Bancos (MZN)</Label>
+                    <Input type="number" min={0} step="0.01" value={bomFinancialSituation[i]?.bancos ?? 0}
+                      onChange={(e) => { const v = parseFloat(e.target.value)||0; setBomFinancialSituation((p) => p.map((r,idx)=>idx===i?{...r,bancos:v}:r)); }} /></div>
+                  <div><Label className="text-xs">Outros Activos (MZN)</Label>
+                    <Input type="number" min={0} step="0.01" value={bomFinancialSituation[i]?.outros_activos ?? 0}
+                      onChange={(e) => { const v = parseFloat(e.target.value)||0; setBomFinancialSituation((p) => p.map((r,idx)=>idx===i?{...r,outros_activos:v}:r)); }} /></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-xl border bg-muted/40 p-4 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Contrato (modelo de folha)
+          </p>
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setContractThemeColor("");
+                setContractPageBgColor("");
+                setContractLogoUrl("");
+                setContractHeaderTitle("");
+                setContractHeaderSubtitle("");
+                setContractDocBadge("");
+                setContractGeneralClauses("");
+              }}
+            >
+              Limpar modelo do contrato
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label>Cor do tema</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="color"
+                  className="w-16 h-9 p-1"
+                  value={contractThemeColor || primaryColor}
+                  onChange={(e) => setContractThemeColor(e.target.value)}
+                />
+                <Input
+                  value={contractThemeColor}
+                  onChange={(e) => setContractThemeColor(e.target.value)}
+                  placeholder="Vazio = usa cor primária"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Cor de fundo da folha</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="color"
+                  className="w-16 h-9 p-1"
+                  value={contractPageBgColor || "#ffffff"}
+                  onChange={(e) => setContractPageBgColor(e.target.value)}
+                />
+                <Input
+                  value={contractPageBgColor}
+                  onChange={(e) => setContractPageBgColor(e.target.value)}
+                  placeholder="Vazio = branco"
+                />
+              </div>
+            </div>
+            <div className="sm:col-span-2 space-y-2">
+              <Label>Logo do contrato</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  className="min-w-[200px] flex-1"
+                  value={contractLogoUrl}
+                  onChange={(e) => setContractLogoUrl(e.target.value)}
+                  placeholder="URL (https://...) ou carregue um ficheiro abaixo"
+                />
+                <input
+                  ref={contractLogoFileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = "";
+                    if (!f) return;
+                    setCropContractLogoSrc(URL.createObjectURL(f));
+                    setCropContractLogoOpen(true);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  disabled={!canEdit}
+                  onClick={() => contractLogoFileRef.current?.click()}
+                >
+                  Carregar e recortar
+                </Button>
+                {initial?.contract_logo_upload_url ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!canEdit}
+                    onClick={async () => {
+                      try {
+                        await systemApi.deleteContractLogoUpload();
+                        await queryClient.invalidateQueries({ queryKey: ["system-settings"] });
+                        toast({ title: "Logo carregado removido" });
+                      } catch {
+                        toast({
+                          title: "Erro",
+                          description: "Não foi possível remover o logo.",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                  >
+                    Remover logo carregado
+                  </Button>
+                ) : null}
+              </div>
+              {initial?.contract_logo_upload_url ? (
+                <p className="text-[11px] text-muted-foreground">
+                  Existe um ficheiro no servidor (tem prioridade sobre a URL).
+                </p>
+              ) : null}
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Título do cabeçalho</Label>
+              <Input
+                value={contractHeaderTitle}
+                onChange={(e) => setContractHeaderTitle(e.target.value)}
+                placeholder="Ex.: MicroCrédito Solidário"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Subtítulo do cabeçalho</Label>
+              <Input
+                value={contractHeaderSubtitle}
+                onChange={(e) => setContractHeaderSubtitle(e.target.value)}
+                placeholder="Ex.: Instituição de crédito comunitário • Moçambique"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>Selo do documento</Label>
+              <Input
+                value={contractDocBadge}
+                onChange={(e) => setContractDocBadge(e.target.value)}
+                placeholder="Ex.: Documento oficial"
+              />
+            </div>
+            <div className="sm:col-span-2 space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="settings-include-contract-sheet">Mostrar condições gerais na folha do contrato</Label>
+                  <p className="text-[11px] text-muted-foreground max-w-xl">
+                    Controla se o bloco de condições gerais aparece na folha impressa.
+                  </p>
+                </div>
+                <Switch
+                  id="settings-include-contract-sheet"
+                  checked={contractIncludeClausesOnSheet}
+                  onCheckedChange={setContractIncludeClausesOnSheet}
+                  disabled={!canEdit}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="settings-contract-general-clauses">Texto das condições gerais</Label>
+                <Textarea
+                  id="settings-contract-general-clauses"
+                  value={contractGeneralClauses}
+                  onChange={(e) => setContractGeneralClauses(e.target.value)}
+                  rows={10}
+                  className="resize-y min-h-[160px] text-sm leading-relaxed"
+                  disabled={!canEdit}
+                  placeholder="Deixe vazio para usar o modelo sugerido, ou escreva o texto da sua instituição."
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                As <strong>condições gerais</strong> aplicam-se a todos os contratos. Os <strong>termos por tipo de
+                empréstimo</strong> definem-se em cada categoria.
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Estas opções moldam a folha oficial e o texto base do contrato. Os dados de cada cliente e empréstimo
+            preenchem-se automaticamente.
+          </p>
+        </div>
+
+        <div className="rounded-xl border bg-muted/40 p-4 space-y-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Categorias do calendário (rótulos)
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {[
+              ["payment", "Pagamento"],
+              ["overdue", "Atraso"],
+              ["vacation", "Férias"],
+              ["meeting", "Reunião"],
+              ["alert", "Alerta"],
+              ["reminder", "Lembrete"],
+              ["other", "Outro"],
+            ].map(([key, fallback]) => (
+              <div key={key}>
+                <Label>{fallback}</Label>
+                <Input
+                  value={(calendarTypeLabels?.[key] ?? "").toString()}
+                  onChange={(e) =>
+                    setCalendarTypeLabels((prev) => ({ ...(prev || {}), [key]: e.target.value }))
+                  }
+                  placeholder={fallback}
+                />
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Dica: deixe vazio para usar o padrão.
+          </p>
+        </div>
+
+        <div className="rounded-xl border bg-gradient-to-br from-muted/50 to-muted/20 p-5 space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Empréstimos — prazos e juros</p>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed max-w-xl">
+              Estes prazos em dias aparecem ao configurar cada tipo de empréstimo. O cliente paga juros em cada ciclo
+              (normalmente 30 dias); se atrasar, a mora segue a regra definida na categoria.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-start">
+            <div className="rounded-lg border bg-card p-4 shadow-sm">
+              <Label className="text-sm">Taxa de juro sugerida (%)</Label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                className="mt-2 max-w-[140px]"
+                value={loanDefaultInterestRate}
+                onChange={(e) => setLoanDefaultInterestRate(e.target.value)}
+                placeholder="Ex.: 5"
+              />
+              <p className="text-[11px] text-muted-foreground mt-2">
+                Só entra em jogo se o tipo de empréstimo não tiver taxa própria.
+              </p>
+            </div>
+            <div className="rounded-lg border bg-card p-4 shadow-sm">
+              <Label className="text-sm">Durações do empréstimo (dias)</Label>
+              <p className="text-[11px] text-muted-foreground mt-1 mb-3">
+                Marque os prazos que quer oferecer (ex.: 15, 30, 60, 90, 120).
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {[15, 30, 45, 60, 90, 120, 180].map((d) => {
+                  const checked = loanAllowedTermsDays.includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => {
+                        setLoanAllowedTermsDays((prev) => {
+                          const set = new Set(prev);
+                          if (set.has(d)) set.delete(d);
+                          else set.add(d);
+                          return Array.from(set).sort((a, b) => a - b);
+                        });
+                      }}
+                      className={
+                        "rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors border " +
+                        (checked
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background text-muted-foreground border-border hover:bg-muted/60")
+                      }
+                    >
+                      {d} dias
+                    </button>
+                  );
+                })}
+              </div>
+              {loanAllowedTermsDays.length === 0 ? (
+                <p className="text-[11px] text-amber-700 dark:text-amber-300 mt-2">Sem restrição: qualquer prazo permitido.</p>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
         <div>
           <Label>Cor do cartão de login (formulário à direita)</Label>
           <div className="flex items-center gap-2">
@@ -1359,6 +1883,19 @@ function SystemSettingsForm({
           </div>
         </div>
       </div>
+
+      <ContractLogoCropDialog
+        open={cropContractLogoOpen}
+        onOpenChange={(o) => {
+          setCropContractLogoOpen(o);
+          if (!o && cropContractLogoSrc?.startsWith("blob:")) {
+            URL.revokeObjectURL(cropContractLogoSrc);
+            setCropContractLogoSrc(null);
+          }
+        }}
+        imageSrc={cropContractLogoSrc}
+        onUploaded={() => void queryClient.invalidateQueries({ queryKey: ["system-settings"] })}
+      />
     </form>
   );
 }
@@ -1468,4 +2005,3 @@ function friendlyResource(p: ApiPermission): string {
   const resource = modelMap[p.model] ?? p.model;
   return `${friendlyAction(p.codename)} ${resource}`;
 }
-

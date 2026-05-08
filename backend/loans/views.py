@@ -1,3 +1,4 @@
+from rest_framework.views import APIView
 import calendar
 from datetime import date, timedelta
 from decimal import Decimal
@@ -8,13 +9,26 @@ from rest_framework.decorators import action
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
+from rest_framework import status as drf_status
 
 from accounts.permissions import RoleAwareDjangoModelPermissions
 
 from validators import MAX_PAGE_SIZE
 
-from .models import Loan, LoanCategory, Payment
-from .serializers import LoanCategorySerializer, LoanSerializer, PaymentSerializer
+from django.conf import settings
+import hashlib
+import hmac
+import base64
+import uuid
+
+from .models import Loan, LoanCategory, Payment, LoanContractProof
+from .serializers import (
+    LoanCategorySerializer,
+    LoanSerializer,
+    PaymentSerializer,
+    LoanContractProofCreateSerializer,
+    LoanContractProofSerializer,
+)
 from .services import refresh_loan_statuses_batch
 
 
@@ -127,6 +141,81 @@ class LoanViewSet(ModelViewSet):
                 }
             )
         return Response(rows)
+
+    @action(detail=True, methods=["post"], url_path="contract-proof")
+    def create_contract_proof(self, request, pk=None):
+        """
+        Cria uma prova de integridade do contrato: SHA256 do texto + SHA256 das assinaturas
+        e um HMAC (SHA256) calculado no servidor.
+        """
+        loan = self.get_object()
+        ser = LoanContractProofCreateSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        contract_text = ser.validated_data["contract_text"]
+        signature_data_url = ser.validated_data.get("signature_data_url") or ""
+        rubrica_data_url = ser.validated_data.get("rubrica_data_url") or ""
+
+        def _sha256_hex(data: bytes) -> str:
+            return hashlib.sha256(data).hexdigest()
+
+        def _dataurl_payload_bytes(data_url: str) -> bytes:
+            if not data_url:
+                return b""
+            if "," not in data_url:
+                return b""
+            _, b64 = data_url.split(",", 1)
+            try:
+                return base64.b64decode(b64, validate=False)
+            except Exception:
+                return b""
+
+        contract_sha = _sha256_hex(contract_text.encode("utf-8"))
+        signature_sha = _sha256_hex(_dataurl_payload_bytes(signature_data_url)) if signature_data_url else ""
+        rubrica_sha = _sha256_hex(_dataurl_payload_bytes(rubrica_data_url)) if rubrica_data_url else ""
+
+        msg = f"{loan.id}:{contract_sha}:{signature_sha}:{rubrica_sha}".encode("utf-8")
+        key = (settings.SECRET_KEY or "").encode("utf-8")
+        server_hmac_sha = hmac.new(key, msg, hashlib.sha256).hexdigest()
+
+        existing = LoanContractProof.objects.filter(
+            loan=loan,
+            contract_sha256=contract_sha,
+            signature_sha256=signature_sha,
+            rubrica_sha256=rubrica_sha,
+        ).first()
+        if existing:
+            return Response(LoanContractProofSerializer(existing).data, status=drf_status.HTTP_200_OK)
+
+        proof = LoanContractProof.objects.create(
+            id=uuid.uuid4(),
+            loan=loan,
+            contract_sha256=contract_sha,
+            signature_sha256=signature_sha,
+            rubrica_sha256=rubrica_sha,
+            server_hmac_sha256=server_hmac_sha,
+            created_by=getattr(request, "user", None) if getattr(request, "user", None) and request.user.is_authenticated else None,
+        )
+        return Response(LoanContractProofSerializer(proof).data, status=drf_status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=["get"], url_path="contract-proof")
+    def lookup_contract_proof(self, request):
+        """
+        Procura uma prova por `q` (proof id UUID ou prefixo do SHA).
+        """
+        q = (request.query_params.get("q") or "").strip()
+        if not q:
+            return Response({"results": []})
+        qs = LoanContractProof.objects.all().order_by("-created_at")
+        # UUID
+        try:
+            uid = uuid.UUID(q)
+            qs = qs.filter(id=uid)
+            return Response({"results": LoanContractProofSerializer(qs, many=True).data})
+        except Exception:
+            pass
+        # Hash prefix
+        qs = qs.filter(contract_sha256__istartswith=q)
+        return Response({"results": LoanContractProofSerializer(qs[:25], many=True).data})
 
 
 class LoanCategoryViewSet(ModelViewSet):
@@ -274,3 +363,32 @@ class PaymentViewSet(ModelViewSet):
         if loan_id:
             qs = qs.filter(loan_id=loan_id)
         return qs
+
+
+class LoanRenewView(APIView):
+    """Create a renewal loan prefilled from a fully paid loan."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        from .models import Loan
+        try:
+            original = Loan.objects.get(pk=pk, status="pago")
+        except Loan.DoesNotExist:
+            return Response({"detail": "Empréstimo não encontrado ou ainda não está pago."}, status=404)
+        from .serializers import LoanSerializer
+        from datetime import date
+        data = {
+            "client": original.client_id,
+            "category": original.category_id if original.category_id else None,
+            "amount": str(original.amount),
+            "interest_rate": str(original.interest_rate),
+            "term": original.term,
+            "sector": original.sector,
+            "start_date": request.data.get("start_date", str(date.today())),
+            "end_date": request.data.get("end_date", ""),
+        }
+        serializer = LoanSerializer(data={k: v for k, v in data.items() if v}, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        new_loan = serializer.save()
+        return Response(LoanSerializer(new_loan).data, status=201)

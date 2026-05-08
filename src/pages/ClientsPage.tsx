@@ -28,7 +28,8 @@ import {
 import { formatCurrency, formatDate } from "@/data/mockData";
 import { clientsApi, loansApi, type ApiClient, type ApiLoan } from "@/lib/api";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus as PlusIcon, ShieldCheck } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { Plus as PlusIcon, ShieldCheck, UserPlus, Users as UsersIcon } from "lucide-react";
 
 const COLLATERAL_TYPES = [
   { value: "documento", label: "Documento" },
@@ -64,6 +65,7 @@ const columns = [
   },
   { key: "phone", label: "Telefone" },
   { key: "city", label: "Cidade" },
+  { key: "gender", label: "Género", render: (c: ApiClient) => c.gender === "M" ? "Homem" : c.gender === "F" ? "Mulher" : c.gender === "O" ? "Outro" : "—" },
   { key: "occupation", label: "Profissão" },
   { key: "total_loans", label: "Empréstimos", render: (c: ApiClient) => <span className="font-medium">{c.total_loans}</span> },
   { key: "status", label: "Status", render: (c: ApiClient) => <StatusBadge status={c.status} /> },
@@ -76,6 +78,13 @@ export default function ClientsPage() {
   const [editingClient, setEditingClient] = useState<ApiClient | null>(null);
   const [deletingClient, setDeletingClient] = useState<ApiClient | null>(null);
   const [showNewLoan, setShowNewLoan] = useState(false);
+  const [recentlyChangedId, setRecentlyChangedId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (recentlyChangedId == null) return;
+    const t = setTimeout(() => setRecentlyChangedId(null), 1800);
+    return () => clearTimeout(t);
+  }, [recentlyChangedId]);
   const [loanForm, setLoanForm] = useState({
     amount: "",
     rate: "",
@@ -96,6 +105,7 @@ export default function ClientsPage() {
     document: "",
     email: "",
     occupation: "",
+    gender: "",
     city: "",
     address: "",
   });
@@ -113,9 +123,10 @@ export default function ClientsPage() {
   const updateClient = useMutation({
     mutationFn: ({ id, payload }: { id: number; payload: Parameters<typeof clientsApi.update>[1] }) =>
       clientsApi.update(id, payload),
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: ["clients"] });
       setEditingClient(null);
+      setRecentlyChangedId(variables.id);
       toast({ title: "Cliente actualizado", description: "As alterações foram guardadas." });
     },
     onError: (error: unknown) => {
@@ -168,8 +179,11 @@ export default function ClientsPage() {
 
   const createClient = useMutation({
     mutationFn: clientsApi.create,
-    onSuccess: async () => {
+    onSuccess: async (created) => {
       await queryClient.invalidateQueries({ queryKey: ["clients"] });
+      if (created && typeof created === "object" && "id" in created) {
+        setRecentlyChangedId((created as { id: number }).id);
+      }
       setShowNew(false);
       setForm({
         name: "",
@@ -177,6 +191,7 @@ export default function ClientsPage() {
         document: "",
         email: "",
         occupation: "",
+        gender: "",
         city: "",
         address: "",
       });
@@ -264,6 +279,25 @@ export default function ClientsPage() {
                       onChange={(e) => setForm((f) => ({ ...f, occupation: e.target.value }))}
                     />
                   </div>
+                  <div>
+                    <Label>Género</Label>
+                    <Select
+                      value={form.gender || "_none"}
+                      onValueChange={(v) =>
+                        setForm((f) => ({ ...f, gender: v === "_none" ? "" : v }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Não especificado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Não especificado</SelectItem>
+                        <SelectItem value="M">Homem</SelectItem>
+                        <SelectItem value="F">Mulher</SelectItem>
+                        <SelectItem value="O">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -293,6 +327,7 @@ export default function ClientsPage() {
                       document: form.document || undefined,
                       email: form.email || undefined,
                       occupation: form.occupation || undefined,
+                      gender: form.gender || undefined,
                       city: form.city || undefined,
                       address: form.address || undefined,
                     })
@@ -311,7 +346,22 @@ export default function ClientsPage() {
         columns={columns}
         searchKeys={["name", "email", "phone", "document", "city", "occupation"]}
         initialSearch={searchQuery}
+        loading={isLoading}
         onRowClick={setSelected}
+        getRowClassName={(c) => (c.id === recentlyChangedId ? "row-flash" : undefined)}
+        emptyState={
+          <EmptyState
+            icon={UsersIcon}
+            title="Nenhum cliente cadastrado"
+            description="Comece por adicionar o seu primeiro cliente para registar empréstimos e acompanhar pagamentos."
+            action={
+              <Button onClick={() => setShowNew(true)}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Adicionar primeiro cliente
+              </Button>
+            }
+          />
+        }
         renderRowActions={
           (canEditClient || canDeleteClient)
             ? (c) => (
@@ -564,6 +614,7 @@ function ClientEditForm({
     document: client.document ?? "",
     email: client.email ?? "",
     occupation: client.occupation ?? "",
+          gender: client.gender ?? "",
     city: client.city ?? "",
     address: client.address ?? "",
   });

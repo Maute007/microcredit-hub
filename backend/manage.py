@@ -5,7 +5,9 @@ import sys
 
 def main() -> None:
     """Run administrative tasks."""
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "Server_microcredit.settings")
+    # Force the correct settings module even if the shell
+    # already has DJANGO_SETTINGS_MODULE from another project.
+    os.environ["DJANGO_SETTINGS_MODULE"] = "Server_microcredit.settings"
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

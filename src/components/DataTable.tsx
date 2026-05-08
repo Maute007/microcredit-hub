@@ -1,8 +1,10 @@
 import { useState, useMemo, useEffect } from "react";
 import { Input } from "@/components/ui/input";
-import { Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, SearchX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DataTableSkeleton } from "@/components/DataTableSkeleton";
+import { EmptyState } from "@/components/EmptyState";
 import { cn } from "@/lib/utils";
 
 interface Column<T> {
@@ -33,6 +35,8 @@ interface DataTableProps<T> {
   loading?: boolean;
   /** Valor inicial da pesquisa (ex: vindo da URL) */
   initialSearch?: string;
+  /** Conteúdo customizado quando não há dados (substitui mensagem padrão). */
+  emptyState?: React.ReactNode;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -49,6 +53,7 @@ export function DataTable<T extends Record<string, any>>({
   getRowClassName,
   loading = false,
   initialSearch = "",
+  emptyState,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState(initialSearch);
   useEffect(() => {
@@ -150,21 +155,29 @@ export function DataTable<T extends Record<string, any>>({
                 ))}
               </tr>
             </thead>
-            <tbody>
-              {loading ? (
+            {loading ? (
+              <DataTableSkeleton rows={Math.min(pageSizeInternal, 6)} columns={displayColumns.length} />
+            ) : paged.length === 0 ? (
+              <tbody>
                 <tr>
-                  <td colSpan={displayColumns.length} className="px-4 py-8 text-center text-muted-foreground">
-                    A carregar...
+                  <td colSpan={displayColumns.length} className="px-0 py-0">
+                    {emptyState ?? (
+                      <EmptyState
+                        icon={SearchX}
+                        title={search || (filterConfig && filterValue && filterValue !== "all")
+                          ? "Nenhum resultado encontrado"
+                          : "Sem registos"}
+                        description={search || (filterConfig && filterValue && filterValue !== "all")
+                          ? "Tente ajustar os filtros ou a pesquisa."
+                          : "Ainda não há dados para mostrar aqui."}
+                      />
+                    )}
                   </td>
                 </tr>
-              ) : paged.length === 0 ? (
-                <tr>
-                  <td colSpan={displayColumns.length} className="px-4 py-8 text-center text-muted-foreground">
-                    Nenhum resultado encontrado
-                  </td>
-                </tr>
-              ) : (
-                paged.map((item, idx) => {
+              </tbody>
+            ) : (
+              <tbody>
+                {paged.map((item, idx) => {
                   const key = rowKey
                     ? typeof rowKey === "function"
                       ? String(rowKey(item))
@@ -195,9 +208,9 @@ export function DataTable<T extends Record<string, any>>({
                     ))}
                   </tr>
                   );
-                })
-              )}
-            </tbody>
+                })}
+              </tbody>
+            )}
           </table>
         </div>
       </div>

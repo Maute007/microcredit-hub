@@ -11,6 +11,12 @@ class Client(models.Model):
         ("inativo", _("Inativo")),
     ]
 
+    GENDER_CHOICES = [
+        ("M", _("Homem")),
+        ("F", _("Mulher")),
+        ("O", _("Outro")),
+    ]
+
     name = models.CharField(max_length=200, verbose_name=_("Nome"))
     email = models.EmailField(blank=True, verbose_name=_("E-mail"))
     phone = models.CharField(max_length=30, blank=True, verbose_name=_("Telefone"))
@@ -18,6 +24,13 @@ class Client(models.Model):
     address = models.TextField(blank=True, verbose_name=_("Morada"))
     city = models.CharField(max_length=100, blank=True, verbose_name=_("Cidade"))
     occupation = models.CharField(max_length=100, blank=True, verbose_name=_("Profissão"))
+    gender = models.CharField(
+        max_length=1,
+        choices=GENDER_CHOICES,
+        blank=True,
+        default="",
+        verbose_name=_("Género"),
+    )
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
