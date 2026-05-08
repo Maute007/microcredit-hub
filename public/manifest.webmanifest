@@ -1,7 +1,7 @@
 {
-  "name": "Microcredit Hub",
-  "short_name": "Microcredit",
-  "description": "Plataforma interna de gestão de microcrédito, RH e contabilidade.",
+  "name": "Nerion Group",
+  "short_name": "Nerion",
+  "description": "Plataforma de gestão de microcrédito, RH e contabilidade - Nerion Group.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
